@@ -34,7 +34,7 @@ curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/silvertakana/
   echo "📥 Downloading .env template..."
   curl -fsSL -o .env https://raw.githubusercontent.com/silvertakana/worldwideview/main/.env.example
   
-  perl -pi -e "s/^AUTH_SECRET=.*$/AUTH_SECRET=$AUTH_SECRET/" .env
+  perl -pi -e "s/^BETTER_AUTH_SECRET=.*$/BETTER_AUTH_SECRET=$AUTH_SECRET/" .env
   perl -pi -e "s/^ENCRYPTION_MASTER_KEY=.*$/ENCRYPTION_MASTER_KEY=$ENCRYPTION_KEY/" .env
 else
   echo "✅ .env already exists, skipping generation."

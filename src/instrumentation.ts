@@ -5,8 +5,8 @@ export async function register() {
     if (!process.env.ENCRYPTION_MASTER_KEY && !process.env.MARKETPLACE_API_KEY) {
       throw new Error("[startup] ENCRYPTION_MASTER_KEY is not set. The server cannot start without it.");
     }
-    if (!process.env.AUTH_SECRET) {
-      throw new Error("[startup] AUTH_SECRET is not set. The server cannot start without it.");
+    if (!process.env.BETTER_AUTH_SECRET) {
+      throw new Error("[startup] BETTER_AUTH_SECRET is not set. The server cannot start without it.");
     }
     if (process.env.NEXT_PUBLIC_WWV_EDITION === "demo" && !process.env.MARKETPLACE_API_KEY) {
       throw new Error("[startup] DEMO EDITION requires MARKETPLACE_API_KEY. Set it in env vars and restart.");

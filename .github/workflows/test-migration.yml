@@ -1,0 +1,49 @@
+name: Migration Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'prisma/migrations/**'
+      - 'tests/migration/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migration-test:
+    name: Migration Integrity Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: wwv_migration_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx prisma generate
+      - run: node tests/migration/run.mjs
+        env:
+          TEST_MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/wwv_migration_test
+      - name: Cleanup — drop test database
+        if: always()
+        run: psql -h 127.0.0.1 -U postgres -c "DROP DATABASE IF EXISTS wwv_migration_test WITH (FORCE);"
+        env:
+          PGPASSWORD: postgres

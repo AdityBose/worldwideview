@@ -10,7 +10,7 @@ services:
       - path: .env
         required: false
     environment:
-      - "AUTH_SECRET=${AUTH_SECRET:-default_secret_for_local_dev}"
+      - "BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-default_secret_for_local_dev}"
       - "ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-local_dev_encryption_key_change_in_prod}"
       - "WWV_DEMO_ADMIN_SECRET=${WWV_DEMO_ADMIN_SECRET:-}"
       - "WWV_BRIDGE_TOKEN=${WWV_BRIDGE_TOKEN:-}"

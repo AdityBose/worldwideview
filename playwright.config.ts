@@ -23,6 +23,7 @@ export default defineConfig({
   // marketplace-redirect-handshake.spec.ts and marketplace-sign-out.spec.ts require marketplace.wwv.local:3002
   //   — use playwright.cross-app.config.ts for these cross-origin handshake tests
   testIgnore: [
+    '**/pact/**',
     '**/web-auth.spec.ts',
     '**/marketplace-from-instance.spec.ts',
     '**/marketplace-redirect-handshake.spec.ts',
@@ -86,6 +87,8 @@ export default defineConfig({
       command: 'pnpm dev',
       env: {
         PORT: '3001',
+        NEXT_PUBLIC_WWV_EDITION: 'local',
+        NEXT_PUBLIC_APP_URL: 'http://localhost:3001',
         NEXT_PUBLIC_MARKETPLACE_URL: 'http://localhost:3002',
       },
       url: 'http://localhost:3001',

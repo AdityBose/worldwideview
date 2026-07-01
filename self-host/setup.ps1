@@ -37,7 +37,7 @@ if (-Not (Test-Path .env)) {
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/silvertakana/worldwideview/main/.env.example" -OutFile .env
     
     $envContent = Get-Content .env -Raw
-    $envContent = $envContent -replace "(?m)^AUTH_SECRET=.*", "AUTH_SECRET=$authSecret"
+    $envContent = $envContent -replace "(?m)^BETTER_AUTH_SECRET=.*", "BETTER_AUTH_SECRET=$authSecret"
     $envContent = $envContent -replace "(?m)^ENCRYPTION_MASTER_KEY=.*", "ENCRYPTION_MASTER_KEY=$encKey"
     $envContent | Out-File -FilePath .env -Encoding utf8
 } else {
