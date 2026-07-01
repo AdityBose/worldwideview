@@ -37,6 +37,7 @@ function resolveBaseUrl(): string {
  */
 export const authClient = createAuthClient({
     baseURL: resolveBaseUrl(),
+    basePath: "/api/ba",
 });
 
 /**
