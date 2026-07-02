@@ -1,8 +1,7 @@
 /* eslint-disable no-console */
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { headers } from "next/headers";
-import { PrismaClient } from "../generated/prisma";
+import { PrismaClient } from "../generated/prisma/index.js";
 
 /**
  * Prisma client singleton — PostgreSQL only.
@@ -17,50 +16,98 @@ const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
 };
 
-function applyTenantIsolation(client: PrismaClient) {
-    // Use Prisma Client Extension to inject RLS
+export function applyTenantIsolation(client: PrismaClient) {
+    // Allowlist of models that have tenantId and must be scoped per D-04.
+    const SCOPED_MODELS = new Set([
+        "Favorite",
+        "InstalledPlugin",
+        "Setting",
+        "MarketplaceCredential",
+        "UserApiKey",
+    ]);
+
     return client.$extends({
         query: {
             $allModels: {
                 async $allOperations({
- model, operation, args, query
-}: { model: string, operation: string, args: Record<string, unknown>, query: (args: unknown) => unknown }) {
-                    let tenantSubdomain = null;
+                    model,
+                    operation,
+                    args,
+                    query,
+                }: {
+                    model: string;
+                    operation: string;
+                    args: Record<string, unknown>;
+                    query: (args: unknown) => unknown;
+                }) {
+                    if (!SCOPED_MODELS.has(model)) return query(args);
+
+                    let orgId: string | null = null;
                     try {
-                        const headersList = await headers();
-                        tenantSubdomain = headersList.get("x-tenant-subdomain");
+                        const { getActiveOrgId } = await import("@/lib/ba-org");
+                        orgId = await getActiveOrgId();
                     } catch {
-                        // Not in a request context (e.g. scripts, background jobs)
+                        // Not in a request context (scripts, background jobs)
                     }
 
-                    if (tenantSubdomain && model !== 'Workspace' && model !== 'WorkspaceMember') {
-                        args = args || {};
+                    if (!orgId) return query(args);
 
-                        // Inject into data for creates
-                        if (operation === 'create' || operation === 'createMany') {
-                            if (Array.isArray(args.data)) {
-                                args.data = args.data.map((d: Record<string, unknown>) => ({ ...d, tenantId: tenantSubdomain }));
-                            } else if (args.data && typeof args.data === 'object') {
-                                (args.data as Record<string, unknown>).tenantId = tenantSubdomain;
-                            }
-                        }
+                    args = args || {};
 
-                        // Inject into data for updates
-                        if (operation === 'update' || operation === 'updateMany') {
-                            if (args.data && typeof args.data === 'object') (args.data as Record<string, unknown>).tenantId = tenantSubdomain;
+                    if (operation === "create" || operation === "createMany") {
+                        if (Array.isArray(args.data)) {
+                            args.data = args.data.map(
+                                (d: Record<string, unknown>) => ({
+                                    ...d,
+                                    tenantId: orgId,
+                                }),
+                            );
+                        } else if (
+                            args.data &&
+                            typeof args.data === "object"
+                        ) {
+                            (args.data as Record<string, unknown>).tenantId =
+                                orgId;
                         }
-                        if (operation === 'upsert') {
-                            if (args.create && typeof args.create === 'object') (args.create as Record<string, unknown>).tenantId = tenantSubdomain;
-                            if (args.update && typeof args.update === 'object') (args.update as Record<string, unknown>).tenantId = tenantSubdomain;
-                        }
-
-                        // Inject into where filters
-                        if (['findUnique', 'findFirst', 'findMany', 'update', 'updateMany', 'delete', 'deleteMany', 'count', 'upsert'].includes(operation)) {
-                            args.where = { ...((args.where as Record<string, unknown>) || {}), tenantId: tenantSubdomain };
-                        }
-
-                        return query(args);
                     }
+
+                    if (operation === "update" || operation === "updateMany") {
+                        if (args.data && typeof args.data === "object") {
+                            (args.data as Record<string, unknown>).tenantId =
+                                orgId;
+                        }
+                    }
+
+                    if (operation === "upsert") {
+                        if (args.create && typeof args.create === "object") {
+                            (args.create as Record<string, unknown>).tenantId =
+                                orgId;
+                        }
+                        if (args.update && typeof args.update === "object") {
+                            (args.update as Record<string, unknown>).tenantId =
+                                orgId;
+                        }
+                    }
+
+                    if (
+                        [
+                            "findUnique",
+                            "findFirst",
+                            "findMany",
+                            "update",
+                            "updateMany",
+                            "delete",
+                            "deleteMany",
+                            "count",
+                            "upsert",
+                        ].includes(operation)
+                    ) {
+                        args.where = {
+                            ...((args.where as Record<string, unknown>) || {}),
+                            tenantId: orgId,
+                        };
+                    }
+
                     return query(args);
                 },
             },

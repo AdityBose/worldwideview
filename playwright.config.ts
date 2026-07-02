@@ -24,6 +24,7 @@ export default defineConfig({
   //   — use playwright.cross-app.config.ts for these cross-origin handshake tests
   testIgnore: [
     '**/pact/**',
+    '**/ci/**',
     '**/web-auth.spec.ts',
     '**/marketplace-from-instance.spec.ts',
     '**/marketplace-redirect-handshake.spec.ts',
