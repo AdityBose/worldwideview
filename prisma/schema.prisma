@@ -51,18 +51,16 @@ model Setting {
 }
 
 model Workspace {
-  id                   String            @id @default(uuid())
-  name                 String
-  subdomain            String            @unique
-  ownerId              String?
-  status               String            @default("trialing")
-  plan                 String            @default("basic")
-  stripeCustomerId     String?
-  stripeSubscriptionId String?
-  trialEndsAt          DateTime?
-  createdAt            DateTime          @default(now())
-  updatedAt            DateTime          @updatedAt
-  members              WorkspaceMember[]
+  id          String            @id @default(uuid())
+  name        String
+  subdomain   String            @unique
+  ownerId     String?
+  status      String            @default("trialing")
+  plan        String            @default("basic")
+  trialEndsAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  members     WorkspaceMember[]
 
   @@map("workspaces")
 }
@@ -259,30 +257,6 @@ model PluginApiKey {
   @@index([userId])
   @@index([organizationId])
   @@map("apiKey")
-}
-
-model PluginSubscription {
-  id                   String    @id @default(uuid())
-  referenceId          String?
-  customerId           String?
-  plan                 String?
-  priceId              String?
-  status               String?
-  seats                Int?
-  trialEndsAt          DateTime?
-  cancelAtPeriodEnd    Boolean?
-  cancelAt             DateTime?
-  canceledAt           DateTime?
-  endedAt              DateTime?
-  stripeSubscriptionId String?
-  stripeCustomerId     String?
-  stripeScheduleId     String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
-
-  @@index([referenceId])
-  @@index([stripeCustomerId])
-  @@map("subscription")
 }
 
 model PluginJwks {
