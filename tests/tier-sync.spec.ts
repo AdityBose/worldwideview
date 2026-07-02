@@ -63,11 +63,12 @@ test.describe('Tier Sync API', () => {
 
   test('HMAC-signed tier-sync request returns 200 and updates tier', async ({ page }) => {
     const body = { email: SYNC_EMAIL, tier: 'pro', status: 'active' };
+    const bodyStr = JSON.stringify(body);
     const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body });
 
     const response = await page.request.post('/api/service/tier-sync', {
-      data: body,
-      headers,
+      data: bodyStr,
+      headers: { ...headers, 'Content-Type': 'application/json' },
     });
 
     expect(response.status()).toBe(200);
@@ -86,22 +87,25 @@ test.describe('Tier Sync API', () => {
   });
 
   test('invalid body returns 400', async ({ page }) => {
-    const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body: {} });
+    const body = {};
+    const bodyStr = JSON.stringify(body);
+    const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body });
 
     const response = await page.request.post('/api/service/tier-sync', {
-      data: {},
-      headers,
+      data: bodyStr,
+      headers: { ...headers, 'Content-Type': 'application/json' },
     });
     expect(response.status()).toBe(400);
   });
 
   test('non-existent email returns 404', async ({ page }) => {
     const body = { email: 'nonexistent@test.local', tier: 'free', status: 'active' };
+    const bodyStr = JSON.stringify(body);
     const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body });
 
     const response = await page.request.post('/api/service/tier-sync', {
-      data: body,
-      headers,
+      data: bodyStr,
+      headers: { ...headers, 'Content-Type': 'application/json' },
     });
     expect(response.status()).toBe(404);
   });
