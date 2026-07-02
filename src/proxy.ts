@@ -39,6 +39,7 @@ const PUBLIC_API_PREFIXES = [
     "/api/build",
     "/api/dev",
     "/api/service",
+    "/api/provision",
 ];
 
 function isPublicApiPath(path: string): boolean {
