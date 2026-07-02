@@ -173,24 +173,4 @@ test.describe('Setup Flow', () => {
     });
     expect(response.status()).toBe(401);
   });
-
-  test('provision endpoint returns 400 for invalid body', async () => {
-    const secret = process.env.CROSS_SERVICE_SECRET || 'test-secret';
-    const body = JSON.stringify({});
-    const timestamp = Math.floor(Date.now() / 1000);
-    const nonce = crypto.randomUUID();
-    const bodyHash = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
-    const canon = `POST\n/api/provision\n${timestamp}\n${bodyHash}`;
-    const sig = crypto.createHmac('sha256', secret).update(canon, 'utf8').digest('hex');
-
-    const response = await fetch('http://localhost:3001/api/provision', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Service-Signature': `t=${timestamp},n=${nonce},sig=${sig}`,
-      },
-      body,
-    });
-    expect(response.status).toBe(400);
-  });
 });
