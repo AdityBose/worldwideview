@@ -96,7 +96,7 @@ test.describe('Setup Flow', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('h1')).toContainText('Invalid Setup Link');
-    await expect(page.locator('p')).toContainText('invalid or has expired');
+    await expect(page.locator('p')).toContainText('Invalid or expired setup link');
   });
 
   test('cloud activation - full flow', async ({ page }) => {
