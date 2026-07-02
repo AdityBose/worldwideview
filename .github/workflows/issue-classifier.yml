@@ -1,0 +1,222 @@
+# Auto-classifies new/edited issues by calling DeepSeek API to determine
+# target repo and type, then applies labels and posts a routing comment.
+name: Issue Classifier
+
+on:
+  issues:
+    types: [opened, reopened, edited]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Skip edited events without title/body changes
+        if: github.event.action == 'edited'
+        id: skip-check
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const changes = context.payload.changes || {};
+            if (!changes.title && !changes.body) {
+              core.notice('Edit did not change title or body -- skipping classification');
+              return 'skip';
+            }
+            return 'proceed';
+
+      - name: Check if already classified
+        id: has-repo-label
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const skipVal = '${{ steps.skip-check.outputs.result }}';
+            if (skipVal === 'skip') return 'skip';
+            const labels = context.payload.issue.labels.map(l => l.name);
+            const hasRepo = labels.some(l => l.startsWith('repo:'));
+            if (hasRepo) {
+              core.notice('Issue already has a repo: label -- skipping');
+              return 'skip';
+            }
+            return 'proceed';
+
+      - name: Classify via DeepSeek API
+        id: classify
+        if: steps.has-repo-label.outputs.result != 'skip'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        with:
+          script: |
+            const apiKey = process.env.DEEPSEEK_API_KEY;
+            if (!apiKey) {
+              core.setOutput('api_failed', 'true');
+              core.setOutput('api_error', 'DEEPSEEK_API_KEY not set');
+              return;
+            }
+
+            const title = context.payload.issue.title;
+            const body = (context.payload.issue.body || '').slice(0, 2000);
+
+            const systemPrompt = 'You classify GitHub issues for the WorldWideView project. Return ONLY valid JSON with no markdown wrapping.\n\n' +
+              'Repositories:\n' +
+              '- app: core globe UI, state management, rendering, CesiumJS, Next.js app\n' +
+              '- plugins: plugin SDK, individual plugin packages\n' +
+              '- seeders: data engine seeders (community or private)\n' +
+              '- data-engine: WebSocket/HTTP data backend, Redis, seeder runtime\n' +
+              '- marketplace: plugin registry, install flow, marketplace auth\n' +
+              '- web: hub site, billing, pricing, landing/marketing\n\n' +
+              'Types:\n' +
+              '- bug: crash, incorrect behavior, error, regression\n' +
+              '- enhancement: feature request, improvement, new capability\n' +
+              '- question: how-to, usage inquiry, clarification\n' +
+              '- plugin-request: suggestion for a new data source plugin\n' +
+              '- task: chore, refactor, docs, CI, tooling, meta\n\n' +
+              'Respond with: {"repo":"...","type":"...","confidence":"...","reasoning":"..."}\n' +
+              'confidence must be high, medium, or low.';
+
+            const payload = {
+              model: 'deepseek-chat',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'Title: ' + title + '\nBody: ' + body }
+              ]
+            };
+
+            try {
+              const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + apiKey
+                },
+                body: JSON.stringify(payload)
+              });
+
+              if (!response.ok) {
+                core.setOutput('api_failed', 'true');
+                core.setOutput('api_error', 'HTTP ' + response.status + ': ' + response.statusText);
+                return;
+              }
+
+              const data = await response.json();
+              let text = data.choices[0].message.content.trim();
+
+              // Strip markdown code fences if present
+              if (text.startsWith('```')) {
+                const firstNewline = text.indexOf('\n');
+                if (firstNewline !== -1) {
+                  text = text.slice(firstNewline + 1);
+                }
+                const closingIdx = text.lastIndexOf('```');
+                if (closingIdx !== -1) {
+                  text = text.slice(0, closingIdx).trim();
+                }
+              }
+
+              const result = JSON.parse(text);
+              core.setOutput('repo', result.repo || 'app');
+              core.setOutput('type', result.type || 'question');
+              core.setOutput('confidence', result.confidence || 'low');
+              core.setOutput('reasoning', (result.reasoning || '').slice(0, 500));
+            } catch (err) {
+              core.setOutput('api_failed', 'true');
+              core.setOutput('api_error', err.message);
+            }
+
+      - name: Fallback -- keyword classification
+        id: fallback
+        if: (steps.classify.outcome == 'failure' || steps.classify.outputs.api_failed == 'true') && steps.has-repo-label.outputs.result != 'skip'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = (context.payload.issue.title || '').toLowerCase();
+            const body = (context.payload.issue.body || '').toLowerCase();
+            const combined = title + ' ' + body;
+
+            let repo = 'app';
+            let type = 'question';
+            let confidence = 'low';
+
+            if (/seeder|data.?feed|poll|data.?source/i.test(combined)) repo = 'seeders';
+            else if (/data.?engine|websocket|redis|stream/i.test(combined)) repo = 'data-engine';
+            else if (/marketplace|install.?plugin|publish.?plugin/i.test(combined)) repo = 'marketplace';
+            else if (/plugin|sdk|worldplugin/i.test(combined)) repo = 'plugins';
+            else if (/web.?site|hub|billing|pricing|landing|marketing/i.test(combined)) repo = 'web';
+
+            if (/bug|crash|error|broken|fail|regression|wrong|incorrect/i.test(combined)) type = 'bug';
+            else if (/feature|request|would.?be|nice.?to|suggest|improve|add.*support/i.test(combined)) type = 'enhancement';
+            else if (/plugin.?request|new.*plugin|data.*source.*idea/i.test(combined)) type = 'plugin-request';
+            else if (/refactor|clean|doc|test|ci|chore|tool|perf|optimize|migrate/i.test(combined)) type = 'task';
+
+            core.setOutput('repo', repo);
+            core.setOutput('type', type);
+            core.setOutput('confidence', confidence);
+            core.setOutput('reasoning', 'Keyword fallback (DeepSeek API unavailable)');
+
+      - name: Apply labels
+        if: steps.has-repo-label.outputs.result != 'skip'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repoLabel = '${{ steps.classify.outputs.repo || steps.fallback.outputs.repo }}';
+            const typeLabel = '${{ steps.classify.outputs.type || steps.fallback.outputs.type }}';
+            const conf = '${{ steps.classify.outputs.confidence || steps.fallback.outputs.confidence }}';
+
+            const labels = ['repo:' + repoLabel, typeLabel];
+            if (conf === 'low') {
+              labels.push('status:needs-triage');
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              labels: labels
+            });
+
+      - name: Post classification comment
+        if: steps.has-repo-label.outputs.result != 'skip'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repoLabel = '${{ steps.classify.outputs.repo || steps.fallback.outputs.repo }}';
+            const typeLabel = '${{ steps.classify.outputs.type || steps.fallback.outputs.type }}';
+            const conf = '${{ steps.classify.outputs.confidence || steps.fallback.outputs.confidence }}';
+            const reasoning = '${{ steps.classify.outputs.reasoning || steps.fallback.outputs.reasoning }}';
+            const isFallbackStr = '${{ steps.classify.outputs.api_failed }}';
+            const outcomeStr = '${{ steps.classify.outcome }}';
+            const isFallback = isFallbackStr === 'true' || outcomeStr === 'failure';
+
+            let body = '## Issue Classification\n\n';
+            body += '| Field | Value |\n';
+            body += '|-------|-------|\n';
+            body += '| Target Repo | `repo:' + repoLabel + '` |\n';
+            body += '| Type | `' + typeLabel + '` |\n';
+            body += '| Confidence | ' + conf + ' |\n';
+            body += '| Reasoning | ' + (reasoning || 'N/A') + ' |\n';
+
+            if (isFallback) {
+              body += '\n> Classification used keyword fallback (DeepSeek API was unavailable).\n';
+            }
+            if (conf === 'low') {
+              body += '\n> Low-confidence classification. A maintainer should verify and adjust labels as needed.';
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: body
+            });
