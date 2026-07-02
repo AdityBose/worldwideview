@@ -8,27 +8,15 @@
  *  - cookiePrefix "better-auth" avoids collision with other auth cookies
  *  - trustedOrigins configurable via env vars with localhost fallbacks
  *  - basePath: "/api/ba" for the Better Auth API handler
- *  - All 6 plugins configured: organization, admin, jwt, oneTimeToken,
- *    apiKey, and stripe (stripe gated on isCloud)
+ *  - All 5 plugins configured: organization, admin, jwt, oneTimeToken, apiKey
  */
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/db";
-import { isCloud } from "@/core/edition";
 import { organization, admin, jwt } from "better-auth/plugins";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { apiKey } from "@better-auth/api-key";
-import { stripe } from "@better-auth/stripe";
-import Stripe from "stripe";
 import { evaluatePasswordStrength, MIN_PASSWORD_SCORE } from "@/lib/password-strength";
-
-// Stripe client — uses dummy key in local edition to avoid initialization
-// errors. Real keys are required only in cloud edition. The plugin degrades
-// gracefully: customer creation and webhook processing silently no-op when
-// the key is a dummy.
-const stripeClient = new Stripe(
-    process.env.STRIPE_SECRET_KEY || "sk_test_dummy_key_for_local_edition"
-);
 
 export const auth = betterAuth({
     basePath: "/api/ba",
@@ -77,9 +65,10 @@ export const auth = betterAuth({
         process.env.NEXT_PUBLIC_WEB_APP_URL || "http://localhost:3001",
         process.env.NEXT_PUBLIC_MARKETPLACE_URL || "http://localhost:3002",
     ].filter(Boolean),
-    // Phase 72: All six Better Auth plugins configured.
+    // Phase 72: All five Better Auth plugins configured.
     // Bundled plugins (organization, admin, jwt, oneTimeToken) require no
-    // additional npm packages. External plugins (apiKey, stripe) added in Task 2.
+    // additional npm packages. External plugin (apiKey) added in Task 2.
+    // Stripe plugin removed per ADR-0009 — hub owns all billing.
     plugins: [
         // Multi-tenant organization scaffolding — single-user org for local,
         // full multi-tenant for cloud.
@@ -105,17 +94,6 @@ export const auth = betterAuth({
         // limiting built-in.
         apiKey({
             schema: { apikey: { modelName: "pluginApiKey" } },
-        }),
-        // Stripe billing — creates customers on sign-up, manages subscription
-        // lifecycle. In local edition: stripeClient has a dummy key, plugin is
-        // dormant. In cloud edition: real keys drive Checkout, Portal, and
-        // webhook processing. createCustomerOnSignUp is gated on isCloud to
-        // avoid dummy Stripe API calls in local edition.
-        stripe({
-            stripeClient,
-            stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
-            createCustomerOnSignUp: isCloud,
-            schema: { subscription: { modelName: "pluginSubscription" } },
         }),
     ],
 });

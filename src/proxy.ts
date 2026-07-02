@@ -38,6 +38,7 @@ const PUBLIC_API_PREFIXES = [
     "/api/glitchtip-tunnel",
     "/api/build",
     "/api/dev",
+    "/api/service",
 ];
 
 function isPublicApiPath(path: string): boolean {

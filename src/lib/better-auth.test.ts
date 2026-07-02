@@ -134,15 +134,6 @@ describe("Plugin configuration", () => {
         expect(auth.options.plugins).toBeDefined();
     });
 
-    it("has stripe plugin configured with a stripeClient", () => {
-        expect(auth.options.plugins).toBeDefined();
-    });
-
-    it("stripe plugin does not throw in local edition without real keys", async () => {
-        expect(auth).toBeDefined();
-        expect(auth.options.plugins).toBeDefined();
-    });
-
     it("password strength validator rejects weak passwords", async () => {
         const opts = auth.options.emailAndPassword;
         expect(opts).toBeDefined();
@@ -176,7 +167,8 @@ describe("Plugin coexistence", () => {
         expect(plugins).toBeDefined();
         expect(Array.isArray(plugins)).toBe(true);
         // Minimum: 4 bundled plugins (org, admin, jwt, ott)
-        // With external: 6 total, but tests mock Stripe differently
+        // With external: 5 total (apiKey).
+        // Stripe plugin removed per ADR-0009.
         expect(plugins.length).toBeGreaterThanOrEqual(4);
     });
 
