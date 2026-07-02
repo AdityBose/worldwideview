@@ -176,7 +176,7 @@ test.describe('Setup Flow', () => {
 
   test('provision endpoint returns 400 for invalid body', async () => {
     const secret = process.env.CROSS_SERVICE_SECRET || 'test-secret';
-    const body = 'not-json';
+    const body = JSON.stringify({});
     const timestamp = Date.now();
     const nonce = crypto.randomUUID();
     const bodyHash = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
