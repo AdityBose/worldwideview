@@ -3,22 +3,9 @@ import { PrismaClient } from '../src/generated/prisma/index.js';
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import crypto from 'node:crypto';
+import { signCrossServiceRequest } from '../src/lib/cross-service/sign';
 
-const TEST_SECRET = 'test-cross-service-secret-for-e2e';
 const SYNC_EMAIL = `tier-sync-${Date.now()}@test.local`;
-
-function signRequest(method: string, path: string, body: unknown, secret: string) {
-  const nonce = crypto.randomUUID();
-  const timestamp = Math.floor(Date.now() / 1000);
-  const bodyStr = body !== undefined ? JSON.stringify(body) : '';
-  const bodyHash = crypto.createHash('sha256').update(bodyStr, 'utf8').digest('hex');
-  const canon = `${method}\n${path}\n${timestamp}\n${bodyHash}`;
-  const sig = crypto.createHmac('sha256', secret).update(canon, 'utf8').digest('hex');
-  return {
-    'X-Service-Signature': `t=${timestamp},n=${nonce},sig=${sig}`,
-    'Content-Type': 'application/json',
-  };
-}
 
 test.describe('Tier Sync API', () => {
   test.describe.configure({ mode: 'serial' });
@@ -29,7 +16,7 @@ test.describe('Tier Sync API', () => {
   let userId: string;
 
   test.beforeAll(async () => {
-    process.env.CROSS_SERVICE_SECRET = TEST_SECRET;
+    process.env.CROSS_SERVICE_SECRET = 'test-cross-service-secret-for-e2e';
     pool = new Pool({ connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/worldwideview?schema=public" });
     const adapter = new PrismaPg(pool);
     prisma = new PrismaClient({ adapter });
@@ -75,23 +62,20 @@ test.describe('Tier Sync API', () => {
   });
 
   test('HMAC-signed tier-sync request returns 200 and updates tier', async ({ page }) => {
-    const headers = signRequest('POST', '/api/service/tier-sync', {
-      email: SYNC_EMAIL,
-      tier: 'pro',
-      status: 'active',
-    }, TEST_SECRET);
+    const body = { email: SYNC_EMAIL, tier: 'pro', status: 'active' };
+    const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body });
 
     const response = await page.request.post('/api/service/tier-sync', {
-      data: { email: SYNC_EMAIL, tier: 'pro', status: 'active' },
+      data: body,
       headers,
     });
 
     expect(response.status()).toBe(200);
-    const body = await response.json();
-    expect(body.success).toBe(true);
-    expect(body.organizationId).toBe(orgId);
-    expect(body.tier).toBe('pro');
-    expect(body.status).toBe('active');
+    const json = await response.json();
+    expect(json.success).toBe(true);
+    expect(json.organizationId).toBe(orgId);
+    expect(json.tier).toBe('pro');
+    expect(json.status).toBe('active');
   });
 
   test('unsigned request returns 401', async ({ page }) => {
@@ -102,7 +86,7 @@ test.describe('Tier Sync API', () => {
   });
 
   test('invalid body returns 400', async ({ page }) => {
-    const headers = signRequest('POST', '/api/service/tier-sync', {}, TEST_SECRET);
+    const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body: {} });
 
     const response = await page.request.post('/api/service/tier-sync', {
       data: {},
@@ -112,21 +96,18 @@ test.describe('Tier Sync API', () => {
   });
 
   test('non-existent email returns 404', async ({ page }) => {
-    const headers = signRequest('POST', '/api/service/tier-sync', {
-      email: 'nonexistent@test.local',
-      tier: 'free',
-      status: 'active',
-    }, TEST_SECRET);
+    const body = { email: 'nonexistent@test.local', tier: 'free', status: 'active' };
+    const headers = signCrossServiceRequest({ method: 'POST', path: '/api/service/tier-sync', body });
 
     const response = await page.request.post('/api/service/tier-sync', {
-      data: { email: 'nonexistent@test.local', tier: 'free', status: 'active' },
+      data: body,
       headers,
     });
     expect(response.status()).toBe(404);
   });
 
   test('tier query returns updated tier after sync', async ({ page }) => {
-    const headers = signRequest('GET', `/api/service/tier?email=${encodeURIComponent(SYNC_EMAIL)}`, undefined, TEST_SECRET);
+    const headers = signCrossServiceRequest({ method: 'GET', path: '/api/service/tier' });
 
     const response = await page.request.get(`/api/service/tier?email=${encodeURIComponent(SYNC_EMAIL)}`, {
       headers,

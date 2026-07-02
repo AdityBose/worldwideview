@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { crossServiceAuth } from "@/lib/cross-service/middleware";
 import { getActiveOrgId } from "@/lib/ba-org";
-import { getOrgTier, getEffectiveTier, resolveOrgIdByEmail } from "@/lib/org-tier";
+import { getOrgTier, resolveOrgIdByEmail } from "@/lib/org-tier";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const authError = await crossServiceAuth(request);
@@ -35,14 +35,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Unable to determine organization" }, { status: 400 });
   }
 
-  const [tierData, effectiveTier] = await Promise.all([
-    getOrgTier(orgId),
-    getEffectiveTier(orgId),
-  ]);
+  const tierData = await getOrgTier(orgId);
+  const isExpiredTrial = tierData.status === "trialing" && tierData.trialEndsAt && tierData.trialEndsAt < new Date();
+  const effectiveTier = isExpiredTrial ? "free" : tierData.tier;
+  const effectiveStatus = isExpiredTrial ? "expired" : tierData.status;
 
   return NextResponse.json({
     ...tierData,
-    effectiveTier: effectiveTier.tier,
-    effectiveStatus: effectiveTier.status,
+    effectiveTier,
+    effectiveStatus,
   });
 }
