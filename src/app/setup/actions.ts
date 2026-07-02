@@ -4,6 +4,7 @@ import { hashPassword } from "better-auth/crypto";
 import { prisma } from "@/lib/db";
 import { isDemo } from "@/core/edition";
 import { evaluatePasswordStrength, MIN_PASSWORD_SCORE } from "@/lib/password-strength";
+import { validateSetupToken, consumeSetupToken } from "@/lib/setup-token";
 
 interface SetupResult {
     success: boolean;
@@ -106,6 +107,88 @@ export async function createAdminAccount(formData: FormData): Promise<SetupResul
                 userId: userId,
                 password: hashedPassword,
             },
+        }),
+    ]);
+
+    return { success: true };
+}
+
+/**
+ * Validate a provision token and return the pre-filled user info.
+ *
+ * Returns valid=false if the token is missing, used, or expired.
+ * Returns valid=true with the user's email and name when the token is valid.
+ */
+export async function validateProvisionToken(token: string): Promise<{
+    valid: boolean;
+    email?: string;
+    name?: string;
+    error?: string;
+}> {
+    const record = await validateSetupToken(token);
+    if (!record) {
+        return { valid: false, error: "Invalid or expired setup link." };
+    }
+
+    const user = await prisma.betterAuthUser.findUnique({
+        where: { id: record.userId },
+        select: { email: true, name: true },
+    });
+    if (!user) {
+        return { valid: false, error: "Setup user not found." };
+    }
+
+    return { valid: true, email: user.email, name: user.name };
+}
+
+/**
+ * Activate a provisioned cloud account by consuming the setup token and
+ * setting the user's real password.
+ *
+ * Atomically consumes the setup token, updates the BetterAuthAccount with
+ * the user's chosen password, and marks the user as emailVerified.
+ *
+ * After activation, the user must log in manually at /login (no auto-login).
+ */
+export async function activateProvisionedAccount(
+    token: string,
+    name: string,
+    email: string,
+    password: string,
+): Promise<SetupResult> {
+    if (!name || !email || !password) {
+        return { success: false, error: "All fields are required." };
+    }
+    const strength = evaluatePasswordStrength(password);
+    if (strength.score < MIN_PASSWORD_SCORE) {
+        return { success: false, error: strength.feedback };
+    }
+    if (password.length < 8) {
+        return { success: false, error: "Password must be at least 8 characters." };
+    }
+
+    const record = await consumeSetupToken(token);
+    if (!record) {
+        return { success: false, error: "Invalid or expired setup link." };
+    }
+
+    const hashedPassword = await hashPassword(password);
+
+    await prisma.$transaction([
+        prisma.betterAuthUser.update({
+            where: { id: record.userId },
+            data: {
+                name,
+                email: email.trim().toLowerCase(),
+                emailVerified: true,
+            },
+        }),
+        prisma.betterAuthAccount.updateMany({
+            where: {
+                userId: record.userId,
+                providerId: "credential",
+            },
+            data: { password: hashedPassword },
         }),
     ]);
 

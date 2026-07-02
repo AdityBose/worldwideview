@@ -140,6 +140,7 @@ model BetterAuthUser {
   favorites     Favorite[]
   memberships   WorkspaceMember[]
   apiKeys       UserApiKey[]
+  setupTokens   SetupToken[]
 
   @@map("user")
 }
@@ -267,4 +268,19 @@ model PluginJwks {
   expiresAt  DateTime?
 
   @@map("jwks")
+}
+
+model SetupToken {
+  id             String         @id @default(uuid())
+  tokenHash      String         @unique
+  userId         String
+  user           BetterAuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String?
+  expiresAt      DateTime
+  usedAt         DateTime?
+  createdAt      DateTime       @default(now())
+
+  @@index([tokenHash])
+  @@index([userId])
+  @@map("setup_tokens")
 }
