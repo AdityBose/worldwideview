@@ -20,7 +20,7 @@ function loadEnv() {
           let value = match[2] || '';
           if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
           if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-          process.env[key] = value;
+          if (value) process.env[key] = value;
         }
       });
     }

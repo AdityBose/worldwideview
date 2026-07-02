@@ -89,6 +89,7 @@ export default defineConfig({
       env: {
         PORT: '3001',
         NEXT_PUBLIC_WWV_EDITION: 'local',
+        CROSS_SERVICE_SECRET: 'test-cross-service-secret-for-e2e',
         NEXT_PUBLIC_APP_URL: 'http://localhost:3001',
         NEXT_PUBLIC_MARKETPLACE_URL: 'http://localhost:3002',
       },
