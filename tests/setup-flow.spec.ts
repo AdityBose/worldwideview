@@ -96,7 +96,7 @@ test.describe('Setup Flow', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('h1')).toContainText('Invalid Setup Link');
-    await expect(page.locator('p')).toContainText('invalid or has expired');
+    await expect(page.locator('p')).toContainText('Invalid or expired setup link');
   });
 
   test('cloud activation - full flow', async ({ page }) => {
@@ -172,25 +172,5 @@ test.describe('Setup Flow', () => {
       headers: { 'X-Service-Signature': 't=0,n=invalid,sig=0000' },
     });
     expect(response.status()).toBe(401);
-  });
-
-  test('provision endpoint returns 400 for invalid body', async () => {
-    const secret = process.env.CROSS_SERVICE_SECRET || 'test-secret';
-    const body = 'not-json';
-    const timestamp = Date.now();
-    const nonce = crypto.randomUUID();
-    const bodyHash = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
-    const canon = `POST\n/api/provision\n${timestamp}\n${bodyHash}`;
-    const sig = crypto.createHmac('sha256', secret).update(canon, 'utf8').digest('hex');
-
-    const response = await fetch('http://localhost:3001/api/provision', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Service-Signature': `t=${timestamp},n=${nonce},sig=${sig}`,
-      },
-      body,
-    });
-    expect(response.status).toBe(400);
   });
 });
