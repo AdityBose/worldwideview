@@ -11,12 +11,6 @@ import kill from 'tree-kill/index.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import process from 'process';
-
-// Capture keys present before we load any .env files — these were set
-// explicitly by the parent process (Playwright webServer, Docker, CI)
-// and must NOT be overridden by .env / .env.local values.
-const initialEnvKeys = new Set(Object.keys(process.env));
-
 // Manually parse .env to avoid external dependencies early in the boot process
 const loadEnv = (file) => {
   try {
@@ -29,9 +23,7 @@ const loadEnv = (file) => {
           let value = match[2] || '';
           if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
           if (value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1);
-          // Only set if not already in the parent process environment.
-          // .env.local still overrides .env because .env is loaded first.
-          if (value && !initialEnvKeys.has(key)) process.env[key] = value;
+          if (value) process.env[key] = value;
         }
       });
     }
