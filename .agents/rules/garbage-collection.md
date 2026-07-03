@@ -51,7 +51,7 @@ When unsure of the tier, escalate to Tier B. Never attempt a refactor that requi
 - `pnpm-lock.yaml` — lockfile integrity
 - `.env`, `.env.local`, `.env.*`, any file containing secrets or tokens
 - Generated assets: `public/cesium/**`, `.next/**`, `node_modules/**`
-- Large seed files: `packages/*/data/**`, `local-seeders/**`
+- Large seed files: `packages/*/data/**`
 - Binary assets: images, videos, fonts, `.db` files
 - `local-scripts/` — scratch / one-off scripts, not subject to conventions
 

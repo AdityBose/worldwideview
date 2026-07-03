@@ -2,7 +2,6 @@
 description: Architecture rules and dependency management guidelines for wwv-data-engine seeders, pnpm workspace dependency loading, and WebSocket payload contracts.
 paths:
   - "packages/**/*"
-  - "local-seeders/**/*"
   - "docker-compose.yml"
 ---
 
@@ -29,9 +28,9 @@ In production, the `wwv-data-engine-v2` does NOT mount the local file system. In
 2. It fetches the latest compiled `seeders.zip` from GitHub Releases for both community and private repositories.
 3. **CRITICAL STEP:** After unzipping the workspaces into a staging directory (`/app/seeders`), the script dynamically generates a root `package.json` and `pnpm-workspace.yaml`.
 4. It then runs a single **workspace-aware `pnpm install --prod`**. This ensures all custom unbundled dependencies declared by the extracted plugins are downloaded directly into the container and properly linked together.
-
 ## 5. Namespace Separation Rule
-To prevent collisions and `404` or `ERR_MODULE_NOT_FOUND` errors, seeders **MUST NOT** exist simultaneously in both the community (`wwv-seeders`, cloned to `local-seeders/community/`) and private (`wwv-seeders-private`, cloned to `local-seeders/private/`) repositories. Namespace overlaps will cause module resolution failures when the V2 engine attempts to load them. Private seeders have priority.
+
+To prevent collisions and `404` or `ERR_MODULE_NOT_FOUND` errors, seeders **MUST NOT** exist simultaneously in both the community (`wwv-seeders`, cloned to a `local-seeders/community/` directory when developing locally) and private (`wwv-seeders-private`, cloned to `local-seeders/private/`) repositories. Namespace overlaps will cause module resolution failures when the V2 engine attempts to load them. Private seeders have priority.
 
 ## 6. Plugin ID Contract — Single Source of Truth
 
