@@ -1,16 +1,16 @@
 name: OpenCode Autonomous Fix
 
 on:
-  issue_comment:
-    types: [created]
-  issues:
-    types: [labeled]
   workflow_dispatch:
     inputs:
       issue_number:
         description: Issue number to fix
         required: true
         type: number
+  issue_comment:
+    types: [created]
+  issues:
+    types: [labeled]
 
 concurrency:
   group: opencode-fix-${{ github.event.issue.number || github.event.inputs.issue_number }}
