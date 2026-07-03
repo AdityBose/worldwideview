@@ -3,9 +3,9 @@
  *
  * Each tier maps to a sliding-window budget. Budgets are configurable via
  * environment variables for self-hosted deployments:
- *   MCP_INVOCATIONS_FREE_MAX=30
- *   MCP_INVOCATIONS_BASIC_MAX=120
- *   MCP_INVOCATIONS_PRO_MAX=600
+ *   MCP_INVOCATIONS_FREE_MAX=100
+ *   MCP_INVOCATIONS_BASIC_MAX=300
+ *   MCP_INVOCATIONS_PRO_MAX=1200
  *   MCP_INVOCATIONS_WINDOW_MS=60000
  */
 
@@ -19,9 +19,9 @@ export interface RateLimitBudget {
 const DEFAULT_WINDOW_MS = Number(process.env.MCP_INVOCATIONS_WINDOW_MS) || 60_000;
 
 const TIER_MAX: Record<string, number> = {
-    free: Number(process.env.MCP_INVOCATIONS_FREE_MAX) || 30,
-    basic: Number(process.env.MCP_INVOCATIONS_BASIC_MAX) || 120,
-    pro: Number(process.env.MCP_INVOCATIONS_PRO_MAX) || 600,
+    free: Number(process.env.MCP_INVOCATIONS_FREE_MAX) || 100,
+    basic: Number(process.env.MCP_INVOCATIONS_BASIC_MAX) || 300,
+    pro: Number(process.env.MCP_INVOCATIONS_PRO_MAX) || 1200,
 };
 
 /**
