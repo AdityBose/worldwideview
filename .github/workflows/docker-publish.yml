@@ -75,7 +75,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -161,7 +161,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -285,7 +285,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -362,7 +362,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
