@@ -23,7 +23,7 @@ jobs:
   fix:
     if: |
       (github.event_name == 'issue_comment' && 
-       (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')) &&
+       (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/gremlin')) &&
        contains('["OWNER","MEMBER","COLLABORATOR"]', github.event.comment.author_association)) ||
       (github.event_name == 'issues' && github.event.action == 'labeled' && 
        github.event.label.name == 'agent-fix' &&
@@ -62,7 +62,7 @@ jobs:
             const isPR = !!context.payload.issue?.pull_request;
             const commentBody = context.payload.comment?.body || '';
             const instruction = commentBody
-              .replace(/^\/(opencode|oc)\s*/i, '')
+              .replace(/^\/(opencode|oc|gremlin)\s*/i, '')
               .trim();
 
             let prompt;
@@ -136,8 +136,8 @@ jobs:
 
       - name: Configure git identity
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+           git config user.name "Gremlin"
+           git config user.email "gremlin@users.noreply.github.com"
 
       - name: Run OpenCode
         uses: anomalyco/opencode/github@v1.17.13
@@ -148,6 +148,7 @@ jobs:
           model: deepseek/deepseek-v4-flash
           use_github_token: true
           share: false
+          mentions: '/opencode,/oc,/gremlin'
           prompt: ${{ steps.issue.outputs.prompt }}
 
       - name: On success
@@ -176,7 +177,7 @@ jobs:
               state: 'open'
             });
 
-            let comment = 'OpenCode has finished working on this issue.';
+            let comment = 'Gremlin has finished working on this issue.';
             if (prs.length > 0) {
               comment += '\n\nPull Request: #' + prs[0].number;
             }
@@ -215,5 +216,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: 'OpenCode was unable to fix this issue automatically. The agent-fix-failed label has been added. Please review manually.'
+              body: 'Gremlin was unable to fix this issue automatically. The agent-fix-failed label has been added. Please review manually.'
             });
