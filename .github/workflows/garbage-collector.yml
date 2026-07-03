@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0          # full history required for git blame and branch age
           token: ${{ secrets.GC_BOT_TOKEN }}   # PAT so pushed branches trigger CI
