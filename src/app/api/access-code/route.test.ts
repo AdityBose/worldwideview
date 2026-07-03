@@ -36,7 +36,7 @@ beforeEach(() => {
 describe("POST /api/access-code", () => {
     it("returns 401 when cross-service auth fails", async () => {
         vi.mocked(crossServiceAuth).mockResolvedValue(
-            new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
+            new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
         );
 
         const req = mockPostRequest({ code: "TEST1234", userId: "u1" });
