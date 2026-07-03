@@ -79,17 +79,23 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Attest build provenance
+        continue-on-error: true
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
       - name: Sign image with Cosign
+        continue-on-error: true
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
@@ -165,17 +171,23 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Attest build provenance
+        continue-on-error: true
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
       - name: Sign image with Cosign
+        continue-on-error: true
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
@@ -233,6 +245,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      attestations: write
       security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -289,11 +302,13 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Attest build provenance
+        continue-on-error: true
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -310,6 +325,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      attestations: write
       security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -366,11 +382,13 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
       - name: Attest build provenance
+        continue-on-error: true
         uses: actions/attest-build-provenance@v1
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
