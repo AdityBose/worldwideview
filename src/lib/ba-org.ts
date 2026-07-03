@@ -1,21 +1,19 @@
 import { cache } from "react";
 import { headers } from "next/headers";
 import { auth } from "@/lib/better-auth";
-import { isCloud } from "@/core/edition";
 
 /**
  * Resolve the active organization ID for the current request.
  *
- * - Cloud edition: resolves from Better Auth's active organization
- *   (`session.session.activeOrganizationId` from the organization plugin),
- *   falling back to the user's oldest PluginMember membership.
- * - Local/demo editions: returns null (single-tenant, no scoping needed).
+ * Reads the active organization from Better Auth's organization plugin
+ * (`session.session.activeOrganizationId`), falling back to the user's
+ * oldest PluginMember membership if no active org is set on the session.
+ *
+ * Returns null when no organization membership exists or when called
+ * outside a request context (scripts, migrations, background jobs).
  *
  * Uses React cache() so the result is computed once per request no
  * matter how many scoped queries run.
- *
- * Handles non-request contexts (scripts, migrations, background jobs)
- * by catching and returning null.
  *
  * Circular import note: ba-org.ts imports from @/lib/better-auth which
  * imports from @/lib/db. This is safe because db.ts only dynamically
@@ -23,8 +21,6 @@ import { isCloud } from "@/core/edition";
  * module graph resolves fully before any query runs.
  */
 export const getActiveOrgId = cache(async (): Promise<string | null> => {
-    if (!isCloud) return null;
-
     try {
         const headersList = await headers();
         const session = await auth.api.getSession({
