@@ -1,5 +1,4 @@
-# v2 - reparse
-name: OpenCode Autonomous Fix
+name: OpenCode Autonomous Fix v2
 
 on:
   workflow_dispatch:
