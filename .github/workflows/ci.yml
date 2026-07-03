@@ -45,6 +45,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high || true
 
+  ascii-lint:
+    name: ASCII Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check for non-ASCII bytes in workflow files, yaml files, and shell scripts
+        run: |
+          exit_code=0
+          for pattern in '.github/workflows/*.yml' '**/*.yml' '**/*.yaml' '**/*.sh'; do
+            while IFS= read -r -d '' f; do
+              if grep -Pl '[^\x00-\x7F]' "$f" 2>/dev/null; then
+                echo "::error file=$f,title=Non-ASCII::Non-ASCII bytes detected in $f"
+                exit_code=1
+              fi
+            done < <(find . -path './node_modules' -prune -o -path './.git' -prune -o -path './dist' -prune -o -path './.next' -prune -o -name "$pattern" -print0)
+          done
+          exit $exit_code
+
   typecheck:
     name: Type Check
     runs-on: ubuntu-latest
