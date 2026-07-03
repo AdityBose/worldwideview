@@ -98,9 +98,38 @@ jobs:
               }
 
               prompt = contextParts.join('\n');
+
+              // Add best practices suffix for custom instructions
+              prompt += `\n\n## Handoff\nWhen creating a PR for any changes:\n- Include "Fixes #${issueNumber}" in the description\n- Never modify or delete tests to make them pass\n- Only modify files necessary for the task\n- Run pnpm lint and pnpm test to verify\n- Max 3 retries per verification step, then restore and report failure`;
             } else {
               // No instruction — default to fix behavior
-              prompt = `Fix this issue in the repository:\n\nTitle: ${issue.title}\n\nDescription:\n${issue.body}\n\n1. Understand the issue\n2. Make the necessary code changes\n3. Run pnpm lint to check for errors\n4. Run pnpm test to verify nothing is broken\n5. Commit and push your changes to a new branch named fix/agent-issue-${issueNumber}\n6. Create a pull request with a clear description of the fix`;
+              prompt = `Fix this issue in the repository.
+
+Issue #${issueNumber}: ${issue.title}
+
+Description:
+${issue.body}
+
+## Workflow
+1. REPRODUCE the issue - confirm it exists before making changes
+2. FIX with minimal, targeted changes
+3. VERIFY with lint + tests (up to 3 retries each)
+4. CHECK edge cases (empty states, null inputs, errors, boundaries)
+5. COMMIT and PR
+
+## Critical Rules
+- NEVER modify or delete tests to make them pass. If a test fails, fix your implementation.
+- Only modify files necessary to fix the issue. No refactoring unrelated code.
+- If you cannot reproduce the issue, report that in the PR description and STOP.
+- Run pnpm lint and pnpm test after changes. Max 3 retries per step.
+- After 3 failed retries, git restore all changes and abort.
+- Before committing, run git diff and check for debug code or accidental changes.
+
+## PR Requirements
+- Branch: fix/agent-issue-${issueNumber}
+- Commit format: fix: <description>
+- PR description must include: what the issue was, root cause, what changed, how verified
+- Include "Fixes #${issueNumber}" at the end of the PR description`;
             }
 
             core.setOutput('issue_number', issueNumber.toString());
