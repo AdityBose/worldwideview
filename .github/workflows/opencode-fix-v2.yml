@@ -22,12 +22,12 @@ env:
 jobs:
   fix:
     if: |
-      github.event_name == 'issue_comment' && (
-        contains(github.event.comment.body, '/opencode') ||
-        contains(github.event.comment.body, '/oc')
-      ) ||
-      github.event_name == 'issues' && github.event.action == 'labeled' &&
-        github.event.label.name == 'agent-fix' ||
+      (github.event_name == 'issue_comment' && 
+       (contains(github.event.comment.body, '/opencode') || contains(github.event.comment.body, '/oc')) &&
+       contains('["OWNER","MEMBER","COLLABORATOR"]', github.event.comment.author_association)) ||
+      (github.event_name == 'issues' && github.event.action == 'labeled' && 
+       github.event.label.name == 'agent-fix' &&
+       contains('["OWNER","MEMBER","COLLABORATOR"]', github.event.sender.author_association)) ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -157,12 +157,17 @@ jobs:
           script: |
             const issueNumber = ${{ steps.issue.outputs.issue_number }};
 
-            await github.rest.issues.removeLabel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              name: 'agent-fix-running'
-            });
+            // Remove status labels
+            for (const label of ['agent-fix-running', 'agent-fix-failed']) {
+              try {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  name: label
+                });
+              } catch {}
+            }
 
             const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
