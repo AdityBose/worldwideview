@@ -112,9 +112,12 @@ jobs:
         continue-on-error: ${{ inputs.is-preview }}
 
       - name: Trigger Coolify deploy
-        if: ${{ secrets.COOLIFY_API_TOKEN != '' && !inputs.is-preview }}
+        if: ${{ !inputs.is-preview }}
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
         run: |
+          [ -z "$COOLIFY_TOKEN" ] && exit 0
           curl -s -X POST "https://coolify.serv.wwv.io/api/v1/deploy" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"force": false}'

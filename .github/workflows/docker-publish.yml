@@ -211,10 +211,12 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-production-arm64.outputs.digest }}
 
       - name: Trigger Coolify deploy
-        if: ${{ secrets.COOLIFY_API_TOKEN != '' }}
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
         run: |
+          [ -z "$COOLIFY_TOKEN" ] && exit 0
           curl -s -X POST "https://coolify.serv.wwv.io/api/v1/deploy" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"force": false}'
 
