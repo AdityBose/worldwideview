@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextResponse } from "next/server";
 import { POST } from "./route";
 import { prisma } from "@/lib/db";
 
@@ -36,7 +37,7 @@ beforeEach(() => {
 describe("POST /api/access-code", () => {
     it("returns 401 when cross-service auth fails", async () => {
         vi.mocked(crossServiceAuth).mockResolvedValue(
-            new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }) as never,
+            NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
         );
 
         const req = mockPostRequest({ code: "TEST1234", userId: "u1" });

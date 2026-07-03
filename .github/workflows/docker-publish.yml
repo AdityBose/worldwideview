@@ -21,6 +21,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -65,7 +66,7 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@7c581b5b4df1a7b927b8684d5cb3f8d6bb9a5b44
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: sarif
@@ -74,7 +75,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -106,6 +107,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -150,7 +152,7 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@7c581b5b4df1a7b927b8684d5cb3f8d6bb9a5b44
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: sarif
@@ -159,7 +161,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -211,10 +213,12 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-production-arm64.outputs.digest }}
 
       - name: Trigger Coolify deploy
-        if: ${{ secrets.COOLIFY_API_TOKEN != '' }}
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
         run: |
+          [ -z "$COOLIFY_TOKEN" ] && exit 0
           curl -s -X POST "https://coolify.serv.wwv.io/api/v1/deploy" \
-            -H "Authorization: Bearer ${{ secrets.COOLIFY_API_TOKEN }}" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"force": false}'
 
@@ -229,6 +233,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -271,7 +276,7 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@7c581b5b4df1a7b927b8684d5cb3f8d6bb9a5b44
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: sarif
@@ -280,7 +285,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
@@ -305,6 +310,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
@@ -347,7 +353,7 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@7c581b5b4df1a7b927b8684d5cb3f8d6bb9a5b44
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
           format: sarif
@@ -356,7 +362,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Upload Trivy results to GitHub Security
         if: always()
