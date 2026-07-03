@@ -62,7 +62,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@7c581b5b4df1a7b927b8684d5cb3f8d6bb9a5b44
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: sarif
