@@ -3,25 +3,15 @@ name: Docker Image CI
 on:
   push:
     branches: ["main"]
-    paths:
-      - "src/**"
-      - "prisma/**"
-      - "packages/**"
-      - "scripts/**"
-      - "Dockerfile"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "next.config.ts"
-      - ".github/workflows/docker-publish.yml"
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # ──────────────────────────────────────────────
-  # Production image — linux/amd64
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
+  # Production image -- linux/amd64
+  # --------------------------------------------------
   build-production-amd64:
     name: Production (amd64)
     runs-on: ubuntu-latest
@@ -104,9 +94,9 @@ jobs:
         run: |
           cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
 
-  # ──────────────────────────────────────────────
-  # Production image — linux/arm64
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
+  # Production image -- linux/arm64
+  # --------------------------------------------------
   build-production-arm64:
     name: Production (arm64)
     runs-on: ubuntu-24.04-arm
@@ -189,9 +179,9 @@ jobs:
         run: |
           cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
 
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
   # Merge production manifests
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
   merge-production:
     name: Merge production manifest
     if: github.event_name != 'pull_request'
@@ -228,9 +218,9 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"force": false}'
 
-  # ──────────────────────────────────────────────
-  # Demo image — linux/amd64
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
+  # Demo image -- linux/amd64
+  # --------------------------------------------------
   build-demo-amd64:
     name: Demo (amd64)
     runs-on: ubuntu-latest
@@ -304,9 +294,9 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
-  # ──────────────────────────────────────────────
-  # Demo image — linux/arm64
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
+  # Demo image -- linux/arm64
+  # --------------------------------------------------
   build-demo-arm64:
     name: Demo (arm64)
     runs-on: ubuntu-24.04-arm
@@ -380,9 +370,9 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
   # Merge demo manifests
-  # ──────────────────────────────────────────────
+  # --------------------------------------------------
   merge-demo:
     name: Merge demo manifest
     if: github.event_name != 'pull_request'

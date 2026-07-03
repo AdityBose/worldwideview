@@ -43,13 +43,13 @@ jobs:
       matrix:
         browser: [chromium, firefox, webkit]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     
     - uses: pnpm/action-setup@v6
       with:
         version: 9.15.4
 
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: 20
         cache: 'pnpm'
