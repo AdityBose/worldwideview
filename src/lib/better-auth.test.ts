@@ -7,7 +7,7 @@
  *  3. Cookie prefix is configured
  *  4. The Prisma adapter is wired correctly
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mock the Prisma client before importing the auth instance
@@ -105,10 +105,12 @@ describe("Better Auth instance", () => {
         expect(auth.options.advanced?.cookiePrefix).toBe("better-auth");
     });
 
-    it("includes trusted origins", () => {
+    it("trustedOrigins resolves to an array of origins", async () => {
         expect(auth.options.trustedOrigins).toBeDefined();
-        expect(Array.isArray(auth.options.trustedOrigins)).toBe(true);
-        expect(auth.options.trustedOrigins.length).toBeGreaterThan(0);
+        expect(typeof auth.options.trustedOrigins).toBe("function");
+        const origins = await auth.options.trustedOrigins();
+        expect(Array.isArray(origins)).toBe(true);
+        expect(origins.length).toBeGreaterThan(0);
     });
 });
 
@@ -214,5 +216,142 @@ describe("Plugin coexistence across editions", () => {
         const mod = await import("@/lib/better-auth");
         expect(mod.auth).toBeDefined();
         expect(mod.auth.options.plugins).toBeDefined();
+    });
+});
+
+describe("buildTrustedOrigins", () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it("returns localhost defaults when no env vars set", async () => {
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const result = mod.buildTrustedOrigins();
+        expect(result).toContain("http://localhost:3000");
+        expect(result).toContain("http://localhost:3001");
+        expect(result).toContain("http://localhost:3002");
+    });
+
+    it("includes NEXT_PUBLIC_APP_URL when set", async () => {
+        vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://192.168.1.50:3000");
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const result = mod.buildTrustedOrigins();
+        expect(result).toContain("http://192.168.1.50:3000");
+    });
+
+    it("includes entries from BETTER_AUTH_TRUSTED_ORIGINS", async () => {
+        vi.stubEnv(
+            "BETTER_AUTH_TRUSTED_ORIGINS",
+            "http://10.0.0.5:3000, http://my-host.local:3000",
+        );
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const result = mod.buildTrustedOrigins();
+        expect(result).toContain("http://10.0.0.5:3000");
+        expect(result).toContain("http://my-host.local:3000");
+    });
+
+    it("de-duplicates entries", async () => {
+        vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://localhost:3000");
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const result = mod.buildTrustedOrigins();
+        const matches = result.filter((u) => u === "http://localhost:3000");
+        expect(matches).toHaveLength(1);
+    });
+
+    it("filters empty entries from BETTER_AUTH_TRUSTED_ORIGINS", async () => {
+        vi.stubEnv(
+            "BETTER_AUTH_TRUSTED_ORIGINS",
+            "http://valid.com, ,, http://other.com",
+        );
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const result = mod.buildTrustedOrigins();
+        expect(result).toContain("http://valid.com");
+        expect(result).toContain("http://other.com");
+        expect(result.every((u) => u.trim().length > 0)).toBe(true);
+    });
+});
+
+describe("resolveTrustedOrigins", () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it("returns static list when request is undefined", async () => {
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const result = await mod.resolveTrustedOrigins();
+        expect(result).toContain("http://localhost:3000");
+        expect(result).toContain("http://localhost:3001");
+        expect(result).toContain("http://localhost:3002");
+    });
+
+    it("appends request origin when isLocal is true", async () => {
+        mockIsCloud = false;
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const request = new Request("http://192.168.1.50:3000/test", {
+            headers: { Origin: "http://192.168.1.50:3000" },
+        });
+        const result = await mod.resolveTrustedOrigins(request);
+        expect(result).toContain("http://192.168.1.50:3000");
+    });
+
+    it("does NOT append request origin when isLocal is false", async () => {
+        mockIsCloud = true;
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const request = new Request("http://192.168.1.50:3000/test", {
+            headers: { Origin: "http://192.168.1.50:3000" },
+        });
+        const result = await mod.resolveTrustedOrigins(request);
+        expect(result).not.toContain("http://192.168.1.50:3000");
+    });
+});
+
+describe("regression: #292", () => {
+    // Issue: self-hosted login broken when accessing via non-localhost address
+    // https://github.com/silvertakana/worldwideview/issues/292
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
+    it("self-hoster at non-localhost address can sign in on local edition", async () => {
+        vi.stubEnv("NEXT_PUBLIC_WWV_EDITION", "local");
+        mockIsCloud = false;
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const request = new Request("http://192.168.1.50:3000/test", {
+            headers: { Origin: "http://192.168.1.50:3000" },
+        });
+        const result = await mod.resolveTrustedOrigins(request);
+        expect(result).toContain("http://192.168.1.50:3000");
+    });
+
+    it("self-hoster at non-localhost address is rejected on cloud edition", async () => {
+        mockIsCloud = true;
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const request = new Request("http://192.168.1.50:3000/test", {
+            headers: { Origin: "http://192.168.1.50:3000" },
+        });
+        const result = await mod.resolveTrustedOrigins(request);
+        expect(result).not.toContain("http://192.168.1.50:3000");
+    });
+
+    it("self-hoster at non-localhost address with explicit NEXT_PUBLIC_APP_URL can sign in on cloud edition", async () => {
+        vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://192.168.1.50:3000");
+        mockIsCloud = true;
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const request = new Request("http://192.168.1.50:3000/test", {
+            headers: { Origin: "http://192.168.1.50:3000" },
+        });
+        const result = await mod.resolveTrustedOrigins(request);
+        expect(result).toContain("http://192.168.1.50:3000");
     });
 });
