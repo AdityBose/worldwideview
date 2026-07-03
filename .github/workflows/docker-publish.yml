@@ -3,16 +3,6 @@ name: Docker Image CI
 on:
   push:
     branches: ["main"]
-    paths:
-      - "src/**"
-      - "prisma/**"
-      - "packages/**"
-      - "scripts/**"
-      - "Dockerfile"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "next.config.ts"
-      - ".github/workflows/docker-publish.yml"
 
 env:
   REGISTRY: ghcr.io
