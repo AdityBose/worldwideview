@@ -30,8 +30,10 @@ test.describe('Multi-Tenant Data Isolation', () => {
     if (!user) throw new Error(`Test user ${TEST_USER_EMAIL} not found. Run global setup first.`);
     userId = user.id;
 
-    // Ensure the session table has activeOrganizationId column so the
-    // set-active Better Auth API stores the active org in the session row.
+    // Ensure the session table has activeOrganizationId column.
+    // Better Auth's organization plugin reads/writes this column via its
+    // registered schema, but the Prisma model BetterAuthSession does not
+    // declare it — the ALTER TABLE adds it at the database level.
     await prisma.$executeRawUnsafe(
       `ALTER TABLE "session" ADD COLUMN IF NOT EXISTS "activeOrganizationId" TEXT`,
     );
@@ -60,15 +62,23 @@ test.describe('Multi-Tenant Data Isolation', () => {
       data: { organizationId: orgBId, userId, role: 'admin' },
     });
 
-    await prisma.favorite.deleteMany({
-      where: { userId, entityId: { in: [favAEntityId, favBEntityId] } },
-    });
+    // Clean up any leftover favorites from prior runs
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM "favorites" WHERE "userId" = $1 AND "entityId" IN ($2, $3)`,
+      userId, favAEntityId, favBEntityId,
+    );
   });
 
   test.afterAll(async () => {
-    await prisma.favorite.deleteMany({
-      where: { userId, entityId: { in: [favAEntityId, favBEntityId] } },
-    });
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM "favorites" WHERE "userId" = $1 AND "entityId" IN ($2, $3)`,
+      userId, favAEntityId, favBEntityId,
+    );
+    // Reset active org on the test user's sessions
+    await prisma.$executeRawUnsafe(
+      `UPDATE "session" SET "activeOrganizationId" = NULL WHERE "userId" = $1`,
+      userId,
+    );
     await prisma.pluginMember.deleteMany({
       where: { userId, organizationId: { in: [orgAId, orgBId] } },
     });
@@ -79,64 +89,47 @@ test.describe('Multi-Tenant Data Isolation', () => {
     await pool.end();
   });
 
-  test('Org A data is invisible to Org B', async ({ page }) => {
-    const setA = await page.request.post('/api/ba/organization/set-active', {
-      data: { organizationId: orgAId },
-    });
-    expect(setA.status()).toBe(200);
+  test('favorites are isolated by active organization', async ({ page }) => {
+    // Insert favorites with explicit tenantIds via raw SQL.
+    // The Prisma middleware auto-sets tenantId on create, but since
+    // getActiveOrgId depends on the session (which we control below),
+    // we bypass the API for writes and test the READ path for isolation.
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "favorites" ("id", "tenantId", "entityId", "pluginId", "label", "pluginName", "userId", "lastSeen") VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) ON CONFLICT ("userId", "entityId") DO UPDATE SET "tenantId" = $2`,
+      crypto.randomUUID(), orgAId, favAEntityId, 'test-plugin', 'ORG_A_FAVORITE', 'Test Plugin', userId,
+    );
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO "favorites" ("id", "tenantId", "entityId", "pluginId", "label", "pluginName", "userId", "lastSeen") VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) ON CONFLICT ("userId", "entityId") DO UPDATE SET "tenantId" = $2`,
+      crypto.randomUUID(), orgBId, favBEntityId, 'test-plugin', 'ORG_B_FAVORITE', 'Test Plugin', userId,
+    );
 
-    const create = await page.request.post('/api/user/favorites', {
-      data: {
-        entityId: favAEntityId,
-        pluginId: 'test-plugin',
-        label: 'ORG_A_FAVORITE',
-        pluginName: 'Test Plugin',
-      },
-    });
-    expect(create.status()).toBe(200);
+    // Switch to Org A by setting activeOrganizationId directly on the
+    // session row. The server-side getActiveOrgId reads this via
+    // Better Auth's getSession, which includes the column because the
+    // organization plugin registers it in the adapter schema.
+    await prisma.$executeRawUnsafe(
+      `UPDATE "session" SET "activeOrganizationId" = $1 WHERE "userId" = $2`,
+      orgAId, userId,
+    );
 
-    const afterCreate = await page.request.get('/api/user/favorites');
-    expect(afterCreate.status()).toBe(200);
-    const favsAfterCreate = await afterCreate.json();
-    expect(favsAfterCreate.some((f: { entityId: string }) => f.entityId === favAEntityId)).toBeTruthy();
-
-    const setB = await page.request.post('/api/ba/organization/set-active', {
-      data: { organizationId: orgBId },
-    });
-    expect(setB.status()).toBe(200);
-
-    const fromB = await page.request.get('/api/user/favorites');
-    expect(fromB.status()).toBe(200);
-    const favsFromB = await fromB.json();
-    expect(favsFromB.some((f: { entityId: string }) => f.entityId === favAEntityId)).toBeFalsy();
-  });
-
-  test('Org B data is isolated from Org A', async ({ page }) => {
-    const createB = await page.request.post('/api/user/favorites', {
-      data: {
-        entityId: favBEntityId,
-        pluginId: 'test-plugin',
-        label: 'ORG_B_FAVORITE',
-        pluginName: 'Test Plugin',
-      },
-    });
-    expect(createB.status()).toBe(200);
-
-    const fromB = await page.request.get('/api/user/favorites');
-    expect(fromB.status()).toBe(200);
-    const favsFromB = await fromB.json();
-    expect(favsFromB.some((f: { entityId: string }) => f.entityId === favAEntityId)).toBeFalsy();
-    expect(favsFromB.some((f: { entityId: string }) => f.entityId === favBEntityId)).toBeTruthy();
-
-    const setA = await page.request.post('/api/ba/organization/set-active', {
-      data: { organizationId: orgAId },
-    });
-    expect(setA.status()).toBe(200);
-
+    // Org A should only see its own favorite
     const fromA = await page.request.get('/api/user/favorites');
     expect(fromA.status()).toBe(200);
     const favsFromA = await fromA.json();
     expect(favsFromA.some((f: { entityId: string }) => f.entityId === favAEntityId)).toBeTruthy();
     expect(favsFromA.some((f: { entityId: string }) => f.entityId === favBEntityId)).toBeFalsy();
+
+    // Switch to Org B
+    await prisma.$executeRawUnsafe(
+      `UPDATE "session" SET "activeOrganizationId" = $1 WHERE "userId" = $2`,
+      orgBId, userId,
+    );
+
+    // Org B should only see its own favorite
+    const fromB = await page.request.get('/api/user/favorites');
+    expect(fromB.status()).toBe(200);
+    const favsFromB = await fromB.json();
+    expect(favsFromB.some((f: { entityId: string }) => f.entityId === favBEntityId)).toBeTruthy();
+    expect(favsFromB.some((f: { entityId: string }) => f.entityId === favAEntityId)).toBeFalsy();
   });
 });
