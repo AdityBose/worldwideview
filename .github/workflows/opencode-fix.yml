@@ -58,8 +58,50 @@ jobs:
               labels: ['agent-fix-running']
             });
 
-            // Build prompt from issue
-            const prompt = `Fix this issue in the repository:\n\nTitle: ${issue.title}\n\nDescription:\n${issue.body}\n\n1. Understand the issue\n2. Make the necessary code changes\n3. Run pnpm lint to check for errors\n4. Run pnpm test to verify nothing is broken\n5. Commit and push your changes to a new branch named fix/agent-issue-${issueNumber}\n6. Create a pull request with a clear description of the fix`;
+            // Check if this is a PR comment
+            const isPR = !!context.payload.issue?.pull_request;
+
+            // Extract instruction from comment body (strip /opencode or /oc prefix)
+            const commentBody = context.payload.comment?.body || '';
+            const instruction = commentBody
+              .replace(/^\/(opencode|oc)\s*/i, '')
+              .trim();
+
+            // Build prompt based on context
+            let prompt;
+            if (instruction) {
+              // User gave a specific instruction — pass it to OpenCode with context
+              const contextParts = [
+                `Repository: ${context.repo.owner}/${context.repo.repo}`,
+                isPR ? `This comment is on PR #${issueNumber}` : `Issue #${issueNumber}: ${issue.title}`,
+                '',
+                `## Description`,
+                issue.body || '(no description)',
+                '',
+                `## Instruction`,
+                instruction,
+              ];
+
+              if (isPR) {
+                contextParts.push(
+                  '',
+                  `The PR branch is already checked out. Review the changes, answer questions about them, or make any requested modifications.`
+                );
+              } else {
+                contextParts.push(
+                  '',
+                  `You have full access to the codebase. Use shell commands and read files as needed.`,
+                  `Run pnpm lint and pnpm test to verify any changes.`,
+                  `If changes are needed, commit and push to a new branch named fix/agent-issue-${issueNumber}`,
+                  ` and create a pull request.`
+                );
+              }
+
+              prompt = contextParts.join('\n');
+            } else {
+              // No instruction — default to fix behavior
+              prompt = `Fix this issue in the repository:\n\nTitle: ${issue.title}\n\nDescription:\n${issue.body}\n\n1. Understand the issue\n2. Make the necessary code changes\n3. Run pnpm lint to check for errors\n4. Run pnpm test to verify nothing is broken\n5. Commit and push your changes to a new branch named fix/agent-issue-${issueNumber}\n6. Create a pull request with a clear description of the fix`;
+            }
 
             core.setOutput('issue_number', issueNumber.toString());
             core.setOutput('prompt', prompt);
