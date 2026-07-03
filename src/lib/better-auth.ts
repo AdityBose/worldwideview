@@ -6,17 +6,67 @@
  *
  * Key decisions:
  *  - cookiePrefix "better-auth" avoids collision with other auth cookies
- *  - trustedOrigins configurable via env vars with localhost fallbacks
+ *  - trustedOrigins: static list from env vars + localhost defaults, with
+ *    dynamic origin trust in local edition (single-tenant, no CSRF risk)
  *  - basePath: "/api/ba" for the Better Auth API handler
  *  - All 5 plugins configured: organization, admin, jwt, oneTimeToken, apiKey
  */
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/db";
+import { isLocal } from "@/core/edition";
 import { organization, admin, jwt } from "better-auth/plugins";
 import { oneTimeToken } from "better-auth/plugins/one-time-token";
 import { apiKey } from "@better-auth/api-key";
 import { evaluatePasswordStrength, MIN_PASSWORD_SCORE } from "@/lib/password-strength";
+
+/**
+ * Build the static base list of trusted origins from environment variables.
+ * Includes configured app URLs and localhost dev defaults. Deduplicates.
+ * Exported for unit testing.
+ */
+export function buildTrustedOrigins(): string[] {
+    const base = [
+        process.env.NEXT_PUBLIC_APP_URL,
+        process.env.NEXT_PUBLIC_WEB_APP_URL,
+        process.env.NEXT_PUBLIC_MARKETPLACE_URL,
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+    ].filter(Boolean) as string[];
+
+    const extra = (process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    return [...new Set([...base, ...extra])];
+}
+
+/**
+ * Resolve trusted origins for a given request.
+ *
+ * In local edition (single-tenant self-host), dynamically appends the
+ * incoming Origin header — the operator is the sole user, so there is
+ * no meaningful CSRF risk worth defending at this layer.
+ *
+ * In cloud/demo editions, returns only the static configured list to
+ * preserve multi-tenant CSRF protection.
+ *
+ * Better Auth calls this per-request. `request` is `undefined` during
+ * initialization and auth.api calls.
+ */
+export async function resolveTrustedOrigins(request?: Request): Promise<string[]> {
+    const base = buildTrustedOrigins();
+    if (!request) return base;
+    if (isLocal) {
+        const origin = request.headers.get("Origin");
+        if (origin && origin !== "null") {
+            base.push(origin);
+        }
+    }
+    return [...new Set(base)];
+}
 
 export const auth = betterAuth({
     basePath: "/api/ba",
@@ -59,12 +109,7 @@ export const auth = betterAuth({
     advanced: {
         cookiePrefix: "better-auth",
     },
-    // Trusted origins: allow requests from all three apps in dev and prod.
-    trustedOrigins: [
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        process.env.NEXT_PUBLIC_WEB_APP_URL || "http://localhost:3001",
-        process.env.NEXT_PUBLIC_MARKETPLACE_URL || "http://localhost:3002",
-    ].filter(Boolean),
+    trustedOrigins: resolveTrustedOrigins,
     // Phase 72: All five Better Auth plugins configured.
     // Bundled plugins (organization, admin, jwt, oneTimeToken) require no
     // additional npm packages. External plugin (apiKey) added in Task 2.

@@ -11,7 +11,6 @@ import kill from 'tree-kill/index.js';
 import { execSync } from 'child_process';
 import fs from 'fs';
 import process from 'process';
-
 // Manually parse .env to avoid external dependencies early in the boot process
 const loadEnv = (file) => {
   try {
