@@ -146,15 +146,16 @@ model BetterAuthUser {
 }
 
 model BetterAuthSession {
-  id        String    @id @default(uuid())
-  userId    String
-  token     String    @unique
-  expiresAt DateTime
-  ipAddress String?
-  userAgent String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  user      BetterAuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(uuid())
+  userId                String
+  token                 String    @unique
+  expiresAt             DateTime
+  ipAddress             String?
+  userAgent             String?
+  activeOrganizationId  String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  BetterAuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([token])
   @@index([userId])
