@@ -25,21 +25,23 @@ const STATIC_ASSET_RE = /\.(?:js|mjs|cjs|css|map|json|txt|xml|webmanifest|ico|pn
 //    before their own auth runs, breaking install/manage from the marketplace origin.
 //  - glitchtip-tunnel/build/dev: telemetry/diagnostics (dev/* is NODE_ENV-gated to 403 in prod).
 const PUBLIC_API_PREFIXES = [
+    "/api/access-code",
     "/api/auth",
     "/api/ba",
-    "/api/internal/workspace",
-    "/api/health",
     "/api/billing/webhook",
-    "/api/mcp",
-    "/api/globe",
-    "/api/v1/entities",
-    "/api/places",
-    "/api/marketplace",
-    "/api/glitchtip-tunnel",
     "/api/build",
     "/api/dev",
-    "/api/service",
+    "/api/glitchtip-tunnel",
+    "/api/globe",
+    "/api/health",
+    "/api/instance",
+    "/api/internal/workspace",
+    "/api/marketplace",
+    "/api/mcp",
+    "/api/places",
     "/api/provision",
+    "/api/service",
+    "/api/v1/entities",
 ];
 
 function isPublicApiPath(path: string): boolean {
