@@ -78,6 +78,9 @@ export async function POST(request: Request) {
     // Auto-create user if not found (hub has already verified)
     let user = await prisma.betterAuthUser.findUnique({ where: { id: body.userId } });
     if (!user && body.email) {
+        user = await prisma.betterAuthUser.findUnique({ where: { email: body.email } });
+    }
+    if (!user && body.email) {
         user = await prisma.betterAuthUser.create({
             data: {
                 id: body.userId,
