@@ -91,11 +91,15 @@ export async function POST(request: Request) {
         });
     }
 
+    if (!user) {
+        return NextResponse.json({ error: "User not found and could not be created" }, { status: 400 });
+    }
+
     const workspace = await prisma.workspace.create({
         data: {
             name: body.name || subdomain,
             subdomain,
-            ownerId: body.userId,
+            ownerId: user.id,
             status: "active",
             plan: "basic",
             tier: body.tier || "free",
@@ -106,7 +110,7 @@ export async function POST(request: Request) {
     await prisma.workspaceMember.create({
         data: {
             workspaceId: workspace.id,
-            userId: body.userId,
+            userId: user.id,
             role: "owner",
         },
     });
