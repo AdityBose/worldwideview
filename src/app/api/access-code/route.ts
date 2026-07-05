@@ -16,9 +16,9 @@ export async function POST(request: Request) {
     );
     if (authError) return authError;
 
-    let body: { code?: string; userId?: string };
+    let body: { code?: string; userId?: string; email?: string };
     try {
-        body = JSON.parse(rawBody) as { code?: string; userId?: string };
+        body = JSON.parse(rawBody) as { code?: string; userId?: string; email?: string };
     } catch {
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
@@ -30,16 +30,34 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    const user = await prisma.betterAuthUser.findUnique({
+    let user = await prisma.betterAuthUser.findUnique({
         where: { id: body.userId },
         select: { id: true, email: true },
     });
+
+    if (!user && body.email) {
+        user = await prisma.betterAuthUser.findUnique({
+            where: { email: body.email },
+            select: { id: true, email: true },
+        });
+    }
+
+    if (!user && body.email) {
+        user = await prisma.betterAuthUser.create({
+            data: {
+                email: body.email,
+                name: body.email.split("@")[0],
+            },
+            select: { id: true, email: true },
+        });
+    }
+
     if (!user) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const membership = await prisma.pluginMember.findFirst({
-        where: { userId: body.userId },
+        where: { userId: user.id },
         select: { organizationId: true },
         orderBy: { createdAt: "asc" },
     });
