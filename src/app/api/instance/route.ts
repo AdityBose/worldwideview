@@ -52,6 +52,7 @@ export async function POST(request: Request) {
         name?: string;
         userId?: string;
         email?: string;
+        tier?: string;
     };
 
     if (!body.subdomain) {
@@ -74,6 +75,19 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Subdomain already taken" }, { status: 409 });
     }
 
+    // Auto-create user if not found (hub has already verified)
+    let user = await prisma.betterAuthUser.findUnique({ where: { id: body.userId } });
+    if (!user && body.email) {
+        user = await prisma.betterAuthUser.create({
+            data: {
+                id: body.userId,
+                name: body.email.split("@")[0],
+                email: body.email,
+                emailVerified: true,
+            },
+        });
+    }
+
     const workspace = await prisma.workspace.create({
         data: {
             name: body.name || subdomain,
@@ -81,6 +95,8 @@ export async function POST(request: Request) {
             ownerId: body.userId,
             status: "active",
             plan: "basic",
+            tier: body.tier || "free",
+            tierStampedAt: new Date(),
         },
     });
 
@@ -98,6 +114,7 @@ export async function POST(request: Request) {
         subdomain: workspace.subdomain,
         status: workspace.status,
         plan: workspace.plan,
+        tier: workspace.tier,
         createdAt: workspace.createdAt,
     });
 }
