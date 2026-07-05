@@ -51,16 +51,21 @@ model Setting {
 }
 
 model Workspace {
-  id          String            @id @default(uuid())
-  name        String
-  subdomain   String            @unique
-  ownerId     String?
-  status      String            @default("trialing")
-  plan        String            @default("basic")
-  trialEndsAt DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  members     WorkspaceMember[]
+  id            String            @id @default(uuid())
+  name          String
+  subdomain     String            @unique
+  ownerId       String?
+  status        String            @default("trialing")
+  plan          String            @default("basic")
+  tier          String            @default("free")
+  locked        Boolean           @default(false)
+  lockedReason  String?
+  lockedAt      DateTime?
+  tierStampedAt DateTime?
+  trialEndsAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  members       WorkspaceMember[]
 
   @@map("workspaces")
 }

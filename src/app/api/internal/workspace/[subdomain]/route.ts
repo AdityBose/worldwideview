@@ -7,7 +7,7 @@ export async function GET(
     { params }: { params: Promise<{ subdomain: string }> }
 ) {
     if (!isCloud) {
-        return NextResponse.json({ status: "active", plan: "basic" });
+        return NextResponse.json({ status: "active", plan: "basic", tier: "free", locked: false, lockedReason: null });
     }
 
     // Await params as required in Next.js 15+
@@ -17,7 +17,7 @@ export async function GET(
     try {
         const workspace = await prisma.workspace.findUnique({
             where: { subdomain },
-            select: { status: true, plan: true }
+            select: { status: true, plan: true, tier: true, locked: true, lockedReason: true }
         });
 
         if (!workspace) {

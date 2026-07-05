@@ -7,7 +7,7 @@ import { hasBetterAuthCookie } from "@/lib/proxy-auth";
 const HUB_REDIRECT_URL = process.env.NEXT_PUBLIC_HUB_REDIRECT_URL ?? "https://worldwideview.dev/hub"
 const TENANT_DOMAIN = process.env.NEXT_PUBLIC_WWV_TENANT_DOMAIN ?? ".app.worldwideview.dev"
 
-const workspaceCache = new Map<string, { status: string; expiresAt: number }>();
+const workspaceCache = new Map<string, { status: string; plan: string; tier: string; locked: boolean; lockedReason: string | null; expiresAt: number }>();
 const CACHE_TTL = 60_000; // 60 seconds
 
 // Anchored static-asset allowlist. Only requests ending in a real asset
@@ -166,10 +166,21 @@ export default async function proxy(req: NextRequest) {
         if (workspaceInfo.status === "suspended" && !path.startsWith("/suspended")) {
             return NextResponse.redirect(new URL("/suspended", req.url));
         }
+        if (workspaceInfo.locked && !path.startsWith("/locked")) {
+            if (path.startsWith("/api/")) {
+                return new NextResponse(
+                    JSON.stringify({ error: "Workspace locked", reason: workspaceInfo.lockedReason }),
+                    { status: 403, headers: { "Content-Type": "application/json" } },
+                );
+            }
+            const lockUrl = new URL("/locked", req.url);
+            lockUrl.searchParams.set("reason", workspaceInfo.lockedReason || "This workspace is locked. Contact the workspace owner.");
+            return NextResponse.redirect(lockUrl);
+        }
     }
 
     // Auth pages: always accessible
-    if (path.startsWith("/setup") || path.startsWith("/login")) {
+    if (path.startsWith("/setup") || path.startsWith("/login") || path.startsWith("/locked")) {
         const res = NextResponse.next();
         if (tenantSubdomain) res.headers.set("x-tenant-subdomain", tenantSubdomain);
         return res;
