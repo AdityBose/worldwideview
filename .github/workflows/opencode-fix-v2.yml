@@ -139,15 +139,11 @@ jobs:
            git config user.name "Gremlin"
            git config user.email "gremlin@users.noreply.github.com"
 
-      - name: Configure git auth with PAT
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.GREMLIN_PAT }}@github.com/${{ github.repository }}.git
-
       - name: Run OpenCode
         uses: anomalyco/opencode/github@v1.17.13
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GREMLIN_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           model: deepseek/deepseek-v4-flash
           use_github_token: true
