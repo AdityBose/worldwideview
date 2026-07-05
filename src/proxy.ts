@@ -4,6 +4,9 @@ import type { NextRequest } from "next/server";
 import { isDemo } from "@/core/edition";
 import { hasBetterAuthCookie } from "@/lib/proxy-auth";
 
+const HUB_REDIRECT_URL = process.env.NEXT_PUBLIC_HUB_REDIRECT_URL ?? "https://worldwideview.dev/hub"
+const TENANT_DOMAIN = process.env.NEXT_PUBLIC_WWV_TENANT_DOMAIN ?? ".app.worldwideview.dev"
+
 const workspaceCache = new Map<string, { status: string; plan: string; tier: string; locked: boolean; lockedReason: string | null; expiresAt: number }>();
 const CACHE_TTL = 60_000; // 60 seconds
 
@@ -87,9 +90,9 @@ export default async function proxy(req: NextRequest) {
     const isCloudDeploy = process.env.NEXT_PUBLIC_WWV_EDITION === "cloud";
 
     if (isCloudDeploy) {
-        const isApp = hostname.includes(".app.worldwideview.dev") || hostname.includes(".localhost");
+        const isApp = hostname.includes(TENANT_DOMAIN) || hostname.includes(".localhost");
         if (isApp) {
-            const subdomain = hostname.replace(".app.worldwideview.dev", "").replace(".localhost", "").split(":")[0];
+            const subdomain = hostname.replace(TENANT_DOMAIN, "").replace(".localhost", "").split(":")[0];
             if (subdomain && subdomain !== "app" && subdomain !== "localhost") {
                 tenantSubdomain = subdomain;
             }
@@ -186,8 +189,9 @@ export default async function proxy(req: NextRequest) {
     // Root Domain (Control Plane) Routing
     if (isCloudDeploy && !tenantSubdomain) {
         // Redirect apex app domain to the external marketing/hub site
-        if (path === "/" || path === "/register" || path === "/dashboard" || path === "/create-workspace") {
-            return NextResponse.redirect("https://worldwideview.dev/hub");
+        // Empty HUB_REDIRECT_URL means skip redirect entirely (local dev mode)
+        if (HUB_REDIRECT_URL && (path === "/" || path === "/register" || path === "/dashboard" || path === "/create-workspace")) {
+            return NextResponse.redirect(HUB_REDIRECT_URL);
         }
     }
 

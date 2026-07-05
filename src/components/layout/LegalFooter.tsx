@@ -1,15 +1,17 @@
+const LEGAL_URL = process.env.NEXT_PUBLIC_LEGAL_URL ?? "https://worldwideview.dev/legal"
+
 export function LegalFooter() {
   return (
     <footer className="legal-footer">
       <a
-        href="https://worldwideview.dev/legal/privacy-policy"
+        href={`${LEGAL_URL}/privacy-policy`}
         target="_blank"
         rel="noopener noreferrer"
       >
         Privacy Policy
       </a>
       <a
-        href="https://worldwideview.dev/legal/cloud-terms-of-service"
+        href={`${LEGAL_URL}/cloud-terms-of-service`}
         target="_blank"
         rel="noopener noreferrer"
       >

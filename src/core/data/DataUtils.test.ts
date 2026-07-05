@@ -93,6 +93,6 @@ describe("resolveEngineUrl", () => {
     (pluginManager.getManifest as any).mockReturnValue(undefined);
 
     const url = resolveEngineUrl("unknown-plugin");
-    expect(url).toContain("worldwideview.dev/stream");
+    expect(url).toContain("worldwideview.dev/stream"); // lint-url: allow (test assertion)
   });
 });

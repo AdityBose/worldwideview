@@ -16,7 +16,7 @@ import { getRequestOrigin } from "@/lib/origin";
 const ALLOWED_REDIRECT_HOSTS = new Set([
     "localhost",
     "127.0.0.1",
-    "worldwideview.dev",
+    "worldwideview.dev", // lint-url: allow (redirect host allowlist entry)
 ]);
 
 if (process.env.ALLOWED_DEV_ORIGIN) {

@@ -18,6 +18,8 @@ import { trackEvent } from "@/lib/analytics";
 import { isDemo, DEMO_ADMIN_ROLE } from "@/core/edition";
 
 import Image from "next/image";
+
+const HUB_URL = process.env.NEXT_PUBLIC_HUB_URL ?? "https://worldwideview.dev"
 import { useIsMobile } from "@/core/hooks/useIsMobile";
 import { SearchBar } from "./SearchBar";
 import { authClient } from "@/lib/auth-client";
@@ -117,7 +119,7 @@ export function Header() {
             <header className="header header--mobile glass-panel">
               <div className="header__brand">
                 <a
-                  href="https://worldwideview.dev/"
+                  href={HUB_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
@@ -238,7 +240,7 @@ export function Header() {
       <>
         <header className="header glass-panel">
           <div className="header__brand">
-            <a href="https://worldwideview.dev/" target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
+            <a href={HUB_URL} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <Image src="/logo/logo-icon.svg" alt="Logo" width={22} height={22} style={{ objectFit: "contain" }} />
                 <div className="header__logo">WORLD WIDE VIEW</div>

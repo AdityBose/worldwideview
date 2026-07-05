@@ -23,7 +23,7 @@ function getMarketplaceUrl(): string {
     return (
         process.env.MARKETPLACE_URL ||
         process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL ||
-        "https://app.worldwideview.dev"
+        "https://app.worldwideview.dev" // lint-url: allow (fallback in env chain)
     );
 }
 

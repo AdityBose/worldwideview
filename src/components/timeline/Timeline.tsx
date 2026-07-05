@@ -83,7 +83,7 @@ export function Timeline() {
                     History unavailable on demo —
                     {" "}
                     <a
-                      href="https://worldwideview.dev"
+                      href={process.env.NEXT_PUBLIC_HUB_URL ?? "https://worldwideview.dev"}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="timeline__history-unavailable-link"
