@@ -33,6 +33,30 @@ area:auth:
           - src/app/login/**/*
           - src/app/setup/**/*
 
+needs-firefox:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/core/globe/**/*
+          - src/**/*.css
+          - src/lib/auth/**/*
+          - src/app/api/auth/**/*
+          - playwright.config.ts
+          - .github/workflows/playwright.yml
+          - tests/**/*
+          - prisma/**/*
+
+needs-webkit:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/core/globe/**/*
+          - src/**/*.css
+          - src/lib/auth/**/*
+          - src/app/api/auth/**/*
+          - playwright.config.ts
+          - .github/workflows/playwright.yml
+          - tests/**/*
+          - prisma/**/*
+
 area:ci:
   - changed-files:
       - any-glob-to-any-file:
