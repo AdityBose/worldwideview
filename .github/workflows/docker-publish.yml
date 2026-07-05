@@ -287,105 +287,12 @@ jobs:
           cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
 
   # --------------------------------------------------
-  # Cloud edition image -- linux/arm64
-  # --------------------------------------------------
-  build-cloud-arm64:
-    name: Cloud (arm64)
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      security-events: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          platforms: linux/arm64
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NEXT_PUBLIC_WWV_EDITION=cloud
-            NEXT_PUBLIC_WWV_TENANT_DOMAIN=.cloud-wwv.dev
-            NEXT_PUBLIC_CESIUM_ION_TOKEN=${{ secrets.NEXT_PUBLIC_CESIUM_ION_TOKEN }}
-            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
-            NEXT_PUBLIC_BING_MAPS_KEY=${{ secrets.NEXT_PUBLIC_BING_MAPS_KEY }}
-            NEXT_PUBLIC_WS_ENGINE_URL=${{ vars.NEXT_PUBLIC_WS_ENGINE_URL }}
-            NEXT_PUBLIC_WWV_PLUGIN_DATA_ENGINE_URL=${{ vars.NEXT_PUBLIC_WWV_PLUGIN_DATA_ENGINE_URL }}
-            NEXT_PUBLIC_ADSENSE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_ADSENSE_CLIENT_ID }}
-            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          cache-from: type=gha,scope=cloud-arm64
-          cache-to: type=gha,scope=cloud-arm64,mode=max
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: sarif
-          output: trivy-results.sarif
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-        continue-on-error: true
-
-      - name: Upload Trivy results to GitHub Security
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
-
-      - name: Attest build provenance
-        continue-on-error: true
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3.8.1
-
-      - name: Sign image with Cosign
-        continue-on-error: true
-        env:
-          COSIGN_EXPERIMENTAL: "1"
-        run: |
-          cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-
-  # --------------------------------------------------
   # Merge cloud manifests
   # --------------------------------------------------
   merge-cloud:
     name: Merge cloud manifest
     if: github.event_name != 'pull_request'
-    needs: [build-cloud-amd64, build-cloud-arm64]
+    needs: [build-cloud-amd64]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -402,13 +309,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push multi-arch manifest
+      - name: Create and push manifest
         run: |
           docker buildx imagetools create \
             -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud \
             -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-${{ github.sha }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-cloud-amd64.outputs.digest }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-cloud-arm64.outputs.digest }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-cloud-amd64.outputs.digest }}
 
   # --------------------------------------------------
   # Merge production manifests
@@ -532,92 +438,12 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
 
   # --------------------------------------------------
-  # Demo image -- linux/arm64
-  # --------------------------------------------------
-  build-demo-arm64:
-    name: Demo (arm64)
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      security-events: write
-    outputs:
-      digest: ${{ steps.build.outputs.digest }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-
-      - name: Build and push by digest
-        id: build
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          platforms: linux/arm64
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            NEXT_PUBLIC_WWV_EDITION=demo
-            NEXT_PUBLIC_DEMO_DEFAULT_PLUGINS=iranwarlive,satellite,gps-jamming
-            NEXT_PUBLIC_CESIUM_ION_TOKEN=${{ secrets.NEXT_PUBLIC_CESIUM_ION_TOKEN }}
-            NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
-            NEXT_PUBLIC_BING_MAPS_KEY=${{ secrets.NEXT_PUBLIC_BING_MAPS_KEY }}
-            NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
-            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          cache-from: type=gha,scope=demo-arm64
-          cache-to: type=gha,scope=demo-arm64,mode=max
-          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
-          format: sarif
-          output: trivy-results.sarif
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
-        continue-on-error: true
-
-      - name: Upload Trivy results to GitHub Security
-        if: always()
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
-        with:
-          sarif_file: trivy-results.sarif
-
-      - name: Attest build provenance
-        continue-on-error: true
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          subject-digest: ${{ steps.build.outputs.digest }}
-
-  # --------------------------------------------------
   # Merge demo manifests
   # --------------------------------------------------
   merge-demo:
     name: Merge demo manifest
     if: github.event_name != 'pull_request'
-    needs: [build-demo-amd64, build-demo-arm64]
+    needs: [build-demo-amd64]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -634,10 +460,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and push multi-arch manifest
+      - name: Create and push manifest
         run: |
           docker buildx imagetools create \
             -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:demo \
             -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:demo-${{ github.sha }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-demo-amd64.outputs.digest }} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-demo-amd64.outputs.digest }}\
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-demo-arm64.outputs.digest }}
