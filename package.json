@@ -21,7 +21,8 @@
     "test:pact": "vitest run tests/pact/",
     "test:e2e": "playwright test",
     "test:mutate": "stryker run",
-    "lint": "eslint .",
+    "lint:urls": "node scripts/lint-urls.mjs",
+    "lint": "eslint . && node scripts/lint-urls.mjs",
     "db:reset": "npx prisma migrate reset --force",
     "db:prune": "node scripts/db-prune.mjs",
     "generate": "prisma generate"

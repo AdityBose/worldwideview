@@ -60,7 +60,7 @@ describe("validateManifest base contract", () => {
         const result = validateManifest(baseManifest({ entry: "https://hacker.com/malicious.js" }));
         expect(result.valid).toBe(false);
         expect(result.errors).toContain(
-            "entry URL must be a relative path, CDN, localhost, or worldwideview.dev domain",
+            "entry URL must be a relative path, CDN, localhost, or worldwideview.dev domain", // lint-url: allow (test assertion)
         );
     });
 
@@ -384,7 +384,7 @@ describe("validateManifest no execution field required (MAN-04)", () => {
 
 describe("validateManifest entry URL allowlist (security)", () => {
     const ERR =
-        "entry URL must be a relative path, CDN, localhost, or worldwideview.dev domain";
+        "entry URL must be a relative path, CDN, localhost, or worldwideview.dev domain"; // lint-url: allow (test assertion constant)
 
     const accepts = (entry: string) => {
         const result = validateManifest(baseManifest({ entry }));
@@ -400,8 +400,8 @@ describe("validateManifest entry URL allowlist (security)", () => {
         accepts("./frontend.mjs");
         accepts("https://unpkg.com/@wwv/plugin/frontend.mjs");
         accepts("https://cdn.jsdelivr.net/npm/@wwv/plugin/frontend.mjs");
-        accepts("https://marketplace.worldwideview.dev/p/frontend.mjs");
-        accepts("https://worldwideview.dev/p/frontend.mjs");
+accepts("https://marketplace.worldwideview.dev/p/frontend.mjs"); // lint-url: allow (test assertion)
+accepts("https://worldwideview.dev/p/frontend.mjs"); // lint-url: allow (test assertion)
         accepts("http://localhost:3000/plugins/x/frontend.mjs");
         accepts("http://127.0.0.1:5000/plugins/x/frontend.mjs");
         accepts("http://[::1]:5000/plugins/x/frontend.mjs");
@@ -410,9 +410,9 @@ describe("validateManifest entry URL allowlist (security)", () => {
     it("rejects substring-bypass hostnames the old check allowed", () => {
         rejects("https://unpkg.com.evil.com/frontend.mjs");
         rejects("https://cdn.jsdelivr.net.evil.com/frontend.mjs");
-        rejects("https://sub.worldwideview.dev.evil.com/frontend.mjs");
-        rejects("https://evil.com/#.worldwideview.dev");
-        rejects("https://evil.com/?x=.worldwideview.dev");
+rejects("https://sub.worldwideview.dev.evil.com/frontend.mjs"); // lint-url: allow (test assertion)
+rejects("https://evil.com/#.worldwideview.dev"); // lint-url: allow (test assertion)
+rejects("https://evil.com/?x=.worldwideview.dev"); // lint-url: allow (test assertion)
         rejects("http://localhost.evil.com/frontend.mjs");
         rejects("https://hacker.com/malicious.js");
     });

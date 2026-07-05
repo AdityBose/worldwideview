@@ -77,11 +77,11 @@ export async function injectHostGlobals(): Promise<void> {
         (globalThis as Record<string, unknown>).__WWV_ENGINE_URL__ = envDataEngine;
     } else {
         // ALWAYS default to the cloud engine unless explicitly told otherwise via env var
-        (globalThis as Record<string, unknown>).__WWV_ENGINE_URL__ = 'https://dataengine.worldwideview.dev';
+        (globalThis as Record<string, unknown>).__WWV_ENGINE_URL__ = 'https://dataengine.worldwideview.dev'; // lint-url: allow (default fallback, gated by env check)
     }
 
     // WebSocket Engine URL
-    const fallbackWs = envDataEngine ? `${envDataEngine.replace(/^http/, "ws")}/stream` : 'wss://dataengine.worldwideview.dev/stream';
+    const fallbackWs = envDataEngine ? `${envDataEngine.replace(/^http/, "ws")}/stream` : 'wss://dataengine.worldwideview.dev/stream'; // lint-url: allow (default fallback, gated by env check)
     (globalThis as Record<string, unknown>).__WWV_WS_ENGINE_URL__ = fallbackWs;
 
     console.log("[HostGlobals] React and SDK injected for dynamic plugins");
