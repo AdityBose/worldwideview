@@ -12,6 +12,10 @@ vi.mock("@/lib/db", () => ({
             findUnique: vi.fn(),
             create: vi.fn(),
         },
+        betterAuthUser: {
+            findUnique: vi.fn(),
+            create: vi.fn(),
+        },
     },
 }));
 
@@ -134,6 +138,7 @@ describe("POST /api/instance", () => {
     it("returns 409 when subdomain already exists", async () => {
         vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
             id: "existing", name: "Existing", subdomain: "test", status: "active", plan: "basic",
+            tier: "free", locked: false, lockedReason: null, lockedAt: null, tierStampedAt: null,
             ownerId: null, trialEndsAt: null, createdAt: new Date(), updatedAt: new Date(),
         } as never);
 
@@ -142,17 +147,21 @@ describe("POST /api/instance", () => {
         expect(res.status).toBe(409);
     });
 
-    it("creates workspace and workspace member", async () => {
+    it("creates workspace and workspace member with tier stamp", async () => {
         vi.mocked(prisma.workspace.findUnique).mockResolvedValue(null);
+        vi.mocked(prisma.betterAuthUser.findUnique).mockResolvedValue({
+            id: "u1", name: "a", email: "a@b.com", emailVerified: true,
+        } as never);
         vi.mocked(prisma.workspace.create).mockResolvedValue({
             id: "new-ws", name: "Test Workspace", subdomain: "test-ws",
-            status: "active", plan: "basic", ownerId: "u1",
+            status: "active", plan: "basic", tier: "pro", ownerId: "u1",
+            locked: false, lockedReason: null, lockedAt: null, tierStampedAt: new Date(),
             trialEndsAt: null, createdAt: new Date(), updatedAt: new Date(),
         } as never);
 
         const req = mockPostRequest({
             subdomain: "test-ws", name: "Test Workspace",
-            userId: "u1", email: "a@b.com",
+            userId: "u1", email: "a@b.com", tier: "pro",
         });
         const res = await POST(req);
         const data = await res.json();
@@ -160,13 +169,48 @@ describe("POST /api/instance", () => {
         expect(res.status).toBe(200);
         expect(data.id).toBe("new-ws");
         expect(data.subdomain).toBe("test-ws");
+        expect(data.tier).toBe("pro");
+        expect(prisma.betterAuthUser.findUnique).toHaveBeenCalledWith({ where: { id: "u1" } });
         expect(prisma.workspace.create).toHaveBeenCalledWith(expect.objectContaining({
             data: expect.objectContaining({
                 subdomain: "test-ws",
                 name: "Test Workspace",
                 ownerId: "u1",
+                tier: "pro",
             }),
         }));
         expect(prisma.workspaceMember.create).toHaveBeenCalled();
+    });
+
+    it("auto-creates user when not found", async () => {
+        vi.mocked(prisma.workspace.findUnique).mockResolvedValue(null);
+        vi.mocked(prisma.betterAuthUser.findUnique).mockResolvedValue(null);
+        vi.mocked(prisma.betterAuthUser.create).mockResolvedValue({
+            id: "u1-new", name: "a", email: "a@b.com", emailVerified: true,
+        } as never);
+        vi.mocked(prisma.workspace.create).mockResolvedValue({
+            id: "new-ws", name: "Test", subdomain: "test-ws",
+            status: "active", plan: "basic", tier: "free", ownerId: "u1",
+            locked: false, lockedReason: null, lockedAt: null, tierStampedAt: new Date(),
+            trialEndsAt: null, createdAt: new Date(), updatedAt: new Date(),
+        } as never);
+
+        const req = mockPostRequest({
+            subdomain: "test-ws", name: "Test",
+            userId: "u1-new", email: "a@b.com",
+        });
+        const res = await POST(req);
+        const data = await res.json();
+
+        expect(res.status).toBe(200);
+        expect(prisma.betterAuthUser.create).toHaveBeenCalledWith({
+            data: {
+                id: "u1-new",
+                name: "a",
+                email: "a@b.com",
+                emailVerified: true,
+            },
+        });
+        expect(data.tier).toBe("free");
     });
 });
