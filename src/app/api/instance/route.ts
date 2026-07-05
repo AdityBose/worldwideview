@@ -8,12 +8,15 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const email = searchParams.get("email");
 
     if (!userId) {
         return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    const memberships = await prisma.workspaceMember.findMany({
+    // If no memberships found by Supabase userId, fall back to email lookup
+    // (workspace_members stores BetterAuth user ID, not Supabase UUID)
+    let memberships = await prisma.workspaceMember.findMany({
         where: { userId },
         include: {
             workspace: true,
@@ -22,6 +25,24 @@ export async function GET(request: Request) {
             joinedAt: "asc",
         },
     });
+
+    if (memberships.length === 0 && email) {
+        const betterAuthUser = await prisma.betterAuthUser.findUnique({
+            where: { email },
+            select: { id: true },
+        });
+        if (betterAuthUser) {
+            memberships = await prisma.workspaceMember.findMany({
+                where: { userId: betterAuthUser.id },
+                include: {
+                    workspace: true,
+                },
+                orderBy: {
+                    joinedAt: "asc",
+                },
+            });
+        }
+    }
 
     const instances = memberships.map((m) => ({
         id: m.workspace.id,
