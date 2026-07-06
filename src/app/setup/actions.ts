@@ -174,7 +174,7 @@ export async function activateProvisionedAccount(
 
     const hashedPassword = await hashPassword(password);
 
-    await prisma.$transaction([
+    const [, accountResult] = await prisma.$transaction([
         prisma.betterAuthUser.update({
             where: { id: record.userId },
             data: {
@@ -191,6 +191,23 @@ export async function activateProvisionedAccount(
             data: { password: hashedPassword },
         }),
     ]);
+
+    // Log diagnostic info
+    console.log("[Setup] Account rows updated:", accountResult.count);
+
+    // If no credential account existed (e.g., provision didn't create one),
+    // create it now so login doesn't fail
+    if (accountResult.count === 0) {
+        await prisma.betterAuthAccount.create({
+            data: {
+                id: crypto.randomUUID(),
+                accountId: email.trim().toLowerCase(),
+                providerId: "credential",
+                userId: record.userId,
+                password: hashedPassword,
+            },
+        });
+    }
 
     return { success: true };
 }
