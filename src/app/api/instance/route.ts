@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { crossServiceAuth } from "@/lib/cross-service/middleware";
 import { prisma } from "@/lib/db";
+import { hashPassword } from "better-auth/crypto";
+import { generateSetupToken } from "@/lib/setup-token";
+import crypto from "node:crypto";
 
 export async function GET(request: Request) {
     const authError = await crossServiceAuth(request);
@@ -99,17 +102,33 @@ export async function POST(request: Request) {
     // Auto-create user if not found (hub has already verified)
     let user = await prisma.betterAuthUser.findUnique({ where: { id: body.userId } });
     if (!user && body.email) {
-        user = await prisma.betterAuthUser.findUnique({ where: { email: body.email } });
+        user = await prisma.betterAuthUser.findUnique({ where: { email: body.email.trim().toLowerCase() } });
     }
+    let setupToken: string | undefined;
     if (!user && body.email) {
+        const placeholderPassword = crypto.randomBytes(32).toString("hex");
+        const hashedPlaceholder = await hashPassword(placeholderPassword);
+
         user = await prisma.betterAuthUser.create({
             data: {
                 id: body.userId,
                 name: body.email.split("@")[0],
-                email: body.email,
+                email: body.email.trim().toLowerCase(),
                 emailVerified: true,
             },
         });
+
+        await prisma.betterAuthAccount.create({
+            data: {
+                userId: user.id,
+                accountId: body.email.trim().toLowerCase(),
+                providerId: "credential",
+                password: hashedPlaceholder,
+            },
+        });
+
+        const generated = await generateSetupToken(user.id, undefined);
+        setupToken = generated.rawToken;
     }
 
     if (!user) {
@@ -136,6 +155,7 @@ export async function POST(request: Request) {
         },
     });
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
     return NextResponse.json({
         id: workspace.id,
         name: workspace.name,
@@ -144,5 +164,6 @@ export async function POST(request: Request) {
         plan: workspace.plan,
         tier: workspace.tier,
         createdAt: workspace.createdAt,
+        ...(setupToken ? { setupToken, setupUrl: `${appUrl}/setup?token=${setupToken}` } : {}),
     });
 }
