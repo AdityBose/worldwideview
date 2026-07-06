@@ -45,7 +45,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         select: { id: true },
     });
     if (existingUser) {
-        return NextResponse.json({ error: "User already provisioned" }, { status: 409 });
+        // User already exists — generate a fresh setup token instead of 409.
+        // This handles the case where the user was provisioned in a previous
+        // attempt (e.g., during earlier bug-fix rounds) and now needs a valid
+        // setup URL with token for first-time activation.
+        const existingMembership = await prisma.pluginMember.findFirst({
+            where: { userId: existingUser.id, role: "owner" },
+            select: { organizationId: true },
+        });
+        const { rawToken } = await generateSetupToken(
+            existingUser.id,
+            existingMembership?.organizationId,
+        );
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+        return NextResponse.json({
+            setupToken: rawToken,
+            setupUrl: `${appUrl}/setup?token=${rawToken}`,
+        });
     }
 
     const placeholderPassword = crypto.randomBytes(32).toString("hex");
