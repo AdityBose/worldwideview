@@ -50,8 +50,10 @@ export function buildTrustedOrigins(): string[] {
  * incoming Origin header — the operator is the sole user, so there is
  * no meaningful CSRF risk worth defending at this layer.
  *
- * In cloud/demo editions, returns only the static configured list to
- * preserve multi-tenant CSRF protection.
+ * In cloud/demo editions, dynamically trusts origins that match the
+ * request's own host (e.g., tester.cloud-wwv.dev), because each cloud
+ * instance has its own subdomain. This is safe — the origin is the same
+ * server the user is accessing.
  *
  * Better Auth calls this per-request. `request` is `undefined` during
  * initialization and auth.api calls.
@@ -59,10 +61,23 @@ export function buildTrustedOrigins(): string[] {
 export async function resolveTrustedOrigins(request?: Request): Promise<string[]> {
     const base = buildTrustedOrigins();
     if (!request) return base;
-    if (isLocal) {
-        const origin = request.headers.get("Origin");
-        if (origin && origin !== "null") {
+    const origin = request.headers.get("Origin");
+    if (origin && origin !== "null") {
+        if (isLocal) {
             base.push(origin);
+        } else {
+            // Cloud/demo: trust origins matching the request's own host
+            // This lets multi-tenant subdomains (e.g., tester.cloud-wwv.dev)
+            // authenticate without adding each one to a static list
+            try {
+                const host = request.headers.get("Host") || new URL(request.url).host;
+                const originHost = new URL(origin).host;
+                if (originHost === host) {
+                    base.push(origin);
+                }
+            } catch {
+                // Malformed URL — skip
+            }
         }
     }
     return [...new Set(base)];

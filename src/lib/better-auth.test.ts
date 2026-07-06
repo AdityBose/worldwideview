@@ -301,15 +301,26 @@ describe("resolveTrustedOrigins", () => {
         expect(result).toContain("http://192.168.1.50:3000");
     });
 
-    it("does NOT append request origin when isLocal is false", async () => {
+    it("does NOT append request origin when isLocal is false and origin mismatches", async () => {
         mockIsCloud = true;
         vi.resetModules();
         const mod = await import("@/lib/better-auth");
         const request = new Request("http://192.168.1.50:3000/test", {
-            headers: { Origin: "http://192.168.1.50:3000" },
+            headers: { Origin: "http://evil.com" },
         });
         const result = await mod.resolveTrustedOrigins(request);
-        expect(result).not.toContain("http://192.168.1.50:3000");
+        expect(result).not.toContain("http://evil.com");
+    });
+
+    it("trusts request origin on cloud when origin matches request host", async () => {
+        mockIsCloud = true;
+        vi.resetModules();
+        const mod = await import("@/lib/better-auth");
+        const request = new Request("https://tester.cloud-wwv.dev/test", {
+            headers: { Origin: "https://tester.cloud-wwv.dev" },
+        });
+        const result = await mod.resolveTrustedOrigins(request);
+        expect(result).toContain("https://tester.cloud-wwv.dev");
     });
 });
 
@@ -333,15 +344,22 @@ describe("regression: #292", () => {
         expect(result).toContain("http://192.168.1.50:3000");
     });
 
-    it("cloud edition does not auto-trust request origins", async () => {
+    it("cloud edition trusts origin matching request host, rejects foreign origin", async () => {
         mockIsCloud = true;
         vi.resetModules();
         const mod = await import("@/lib/better-auth");
-        const request = new Request("http://192.168.1.50:3000/test", {
+        // Origin matching the request's own host is trusted (same-server)
+        const legitRequest = new Request("http://192.168.1.50:3000/test", {
             headers: { Origin: "http://192.168.1.50:3000" },
         });
-        const result = await mod.resolveTrustedOrigins(request);
-        expect(result).not.toContain("http://192.168.1.50:3000");
+        const legitResult = await mod.resolveTrustedOrigins(legitRequest);
+        expect(legitResult).toContain("http://192.168.1.50:3000");
+        // Foreign origin is rejected (CSRF protection)
+        const evilRequest = new Request("http://192.168.1.50:3000/test", {
+            headers: { Origin: "http://evil.com" },
+        });
+        const evilResult = await mod.resolveTrustedOrigins(evilRequest);
+        expect(evilResult).not.toContain("http://evil.com");
     });
 
     it("explicit NEXT_PUBLIC_APP_URL works for any edition", async () => {
