@@ -33,9 +33,9 @@ vi.mock("@/core/plugins/validateManifest", () => ({
     validateManifest: (...a: any[]) => mockValidateManifest(...a),
 }));
 
-const mockGetVerifiedPluginIds = vi.fn();
+const mockGetRegistryPluginList = vi.fn();
 vi.mock("./registryClient", () => ({
-    getVerifiedPluginIds: (...a: any[]) => mockGetVerifiedPluginIds(...a),
+    getRegistryPluginList: (...a: any[]) => mockGetRegistryPluginList(...a),
 }));
 
 let mockIsDemo = false;
@@ -78,7 +78,7 @@ describe("seedDefaultPlugins", () => {
         // verified registry returns the fake set.
         mockFindFirst.mockResolvedValue(null);
         mockCount.mockResolvedValue(0);
-        mockGetVerifiedPluginIds.mockResolvedValue(new Set(FAKE_VERIFIED_IDS));
+        mockGetRegistryPluginList.mockResolvedValue(FAKE_VERIFIED_IDS.map((id) => ({ id, autoSeed: true })));
         mockValidateManifest.mockReturnValue({ valid: true, errors: [] });
         mockUpsertPlugin.mockResolvedValue({});
         mockCreate.mockResolvedValue({});
@@ -120,7 +120,7 @@ describe("seedDefaultPlugins", () => {
 
         expect(mockUpsertPlugin).not.toHaveBeenCalled();
         expect(mockFetch).not.toHaveBeenCalled();
-        expect(mockGetVerifiedPluginIds).not.toHaveBeenCalled();
+        expect(mockGetRegistryPluginList).not.toHaveBeenCalled();
     });
 
     it("marks seeded without installing when plugins already exist", async () => {
@@ -139,7 +139,7 @@ describe("seedDefaultPlugins", () => {
 
     it("does not markSeeded when the verified registry is empty", async () => {
         // Simulates registry outage / signature failure / no cache
-        mockGetVerifiedPluginIds.mockResolvedValue(new Set<string>());
+        mockGetRegistryPluginList.mockResolvedValue([]);
 
         await seedDefaultPlugins();
 
@@ -169,7 +169,7 @@ describe("seedDefaultPlugins", () => {
 
         expect(mockUpsertPlugin).not.toHaveBeenCalled();
         expect(mockFetch).not.toHaveBeenCalled();
-        expect(mockGetVerifiedPluginIds).not.toHaveBeenCalled();
+        expect(mockGetRegistryPluginList).not.toHaveBeenCalled();
         // Guard row written so it doesn't re-check
         expect(mockCreate).toHaveBeenCalled();
     });
@@ -181,7 +181,7 @@ describe("seedDefaultPlugins", () => {
 
         expect(mockUpsertPlugin).not.toHaveBeenCalled();
         expect(mockFetch).not.toHaveBeenCalled();
-        expect(mockGetVerifiedPluginIds).not.toHaveBeenCalled();
+        expect(mockGetRegistryPluginList).not.toHaveBeenCalled();
         expect(mockCreate).not.toHaveBeenCalled();
     });
 

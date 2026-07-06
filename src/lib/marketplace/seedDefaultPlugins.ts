@@ -2,7 +2,7 @@ import { isDemo } from "@/core/edition";
 import { validateManifest } from "@/core/plugins/validateManifest";
 import { prisma } from "../db";
 import { upsertPlugin } from "./repository";
-import { getVerifiedPluginIds } from "./registryClient";
+import { getRegistryPluginList } from "./registryClient";
 
 const MARKETPLACE_URL = process.env.NEXT_PUBLIC_MARKETPLACE_URL
     || "https://marketplace.worldwideview.dev";
@@ -10,9 +10,9 @@ const MARKETPLACE_URL = process.env.NEXT_PUBLIC_MARKETPLACE_URL
 /**
  * Seed verified marketplace plugins on a fresh install.
  *
- * The signed registry (`getVerifiedPluginIds`) is the single source of truth
- * for which plugins land in a brand-new instance — there is no hard-coded
- * default list. Publish a plugin to the verified registry and it auto-seeds
+ * The signed registry (`getRegistryPluginList`) is the single source of truth.
+ * Only plugins with `autoSeed: true` are auto-installed on fresh instances.
+ * Publish a plugin with `autoSeed: true` in the registry and it auto-seeds
  * on subsequent fresh installs.
  *
  * Runs at most once per instance lifecycle: an idempotent guard
@@ -47,25 +47,25 @@ export async function seedDefaultPlugins(): Promise<void> {
             return;
         }
 
-        const verified = await getVerifiedPluginIds();
-        if (verified.size === 0) {
+        const autoSeedPlugins = (await getRegistryPluginList()).filter((p) => p.autoSeed);
+        if (autoSeedPlugins.length === 0) {
             // Registry unreachable / signature failed / empty — defer so the
             // next request retries instead of locking in an empty fresh install.
             console.warn(
-                "[DefaultPlugins] Verified registry returned empty — deferring seed, will retry next request",
+                "[DefaultPlugins] No autoSeed plugins in registry — deferring seed, will retry next request",
             );
             return;
         }
 
         console.log(
-            `[DefaultPlugins] Fresh install detected — seeding ${verified.size} verified plugins…`,
+            `[DefaultPlugins] Fresh install detected — seeding ${autoSeedPlugins.length} auto-seed plugins\u2026`,
         );
 
         let installed = 0;
 
-        for (const pluginId of verified) {
+        for (const plugin of autoSeedPlugins) {
             try {
-                const manifest = await fetchManifest(pluginId);
+                const manifest = await fetchManifest(plugin.id);
                 if (!manifest) continue;
 
                 // Every plugin in the verified set is by definition verified.
@@ -81,20 +81,20 @@ export async function seedDefaultPlugins(): Promise<void> {
                 const validation = validateManifest(manifest);
                 if (!validation.valid) {
                     console.warn(
-                        `[DefaultPlugins] Skipping ${pluginId}: ${validation.errors.join(", ")}`,
+                        `[DefaultPlugins] Skipping ${plugin.id}: ${validation.errors.join(", ")}`,
                     );
                     continue;
                 }
 
                 await upsertPlugin(
-                    pluginId,
+                    plugin.id,
                     (manifest.version as string | undefined) || "1.0.0",
                     JSON.stringify(manifest),
                 );
                 installed += 1;
             } catch (err) {
                 console.warn(
-                    `[DefaultPlugins] Failed to seed ${pluginId}:`,
+                        `[DefaultPlugins] Failed to seed ${plugin.id}:`,
                     err,
                 );
             }
@@ -102,7 +102,7 @@ export async function seedDefaultPlugins(): Promise<void> {
 
         await markSeeded();
         console.log(
-            `[DefaultPlugins] Seeded ${installed}/${verified.size} plugins`,
+            `[DefaultPlugins] Seeded ${installed}/${autoSeedPlugins.length} plugins`,
         );
     } catch (err) {
         console.error("[DefaultPlugins] Seeder failed:", err);
