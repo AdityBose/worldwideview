@@ -237,7 +237,7 @@ GET marketplace.worldwideview.dev/api/registry
 - Trust is **always stamped server-side** — no client-side trust claims accepted
 - Registry response cached for **5 minutes** (in-memory on each WWV instance)
 - If registry unreachable, last cached result used; new unknowns default to `unverified`
-- **Managing:** Use the marketplace admin API (`/api/admin/registry`) to manage the signed plugin registry. The old `src/data/verifiedPlugins.ts` static file was replaced by database-driven registry management.
+- **Managing:** Use the marketplace admin API (`/api/admin/registry`) to manage the signed plugin registry. The static verified-plugins file was replaced by database-driven registry management.
 - **Revoking:** Remove plugin ID and redeploy — WWV instances drop trust on next cache refresh
 
 ### Unverified Plugin Warning
@@ -462,7 +462,7 @@ To solve this friction and make third-party plugin hosting highly intuitive, the
 2. **Backend SDK:** They write simple `.ts` fetch scripts returning `GeoEntity[]` and drop them into a mounted `/seeders` volume.
 3. **Zero Configuration:** The Docker engine hot-reloads these seeders, handles the Redis caching, and exposes standardized REST or WebSocket endpoints automatically. The developer focuses only on fetching data, avoiding all backend infrastructure setup.
 
-The `data-engine-seeder-creation.md` skill was removed. Seeder implementation rules are documented inline in `.agents/rules/data-engine-architecture.md`. Seeders live in `local-seeders/community/` or `local-seeders/private/` (separate git clones).
+The `data-engine-seeder-creation.md` skill was removed. Seeder implementation rules are documented inline in `.agents/rules/data-engine-architecture.md`. Seeders live in the separate `wwv-seeders` and `wwv-seeders-private` repositories (cloned to `local-seeders/community/` or `local-seeders/private/` when developing locally).
 
 ---
 
@@ -494,7 +494,7 @@ While avoiding monolithic coupling, WWV plans to implement the following high-UX
 
 ### 1. Local Plugin Workflow (`local-plugins/` — community plugin repo clone)
 `local-plugins/` is a git clone of `github.com/silvertakana/wwv-plugins` with its own remote. Pull latest before starting: `cd local-plugins && git pull`.
-- **Scaffold**: `node packages/wwv-cli/dist/index.js create` (creates inside `local-plugins/wwv-plugin-<name>` by default, or `packages/` if `--core` is used).
+- **Scaffold**: `node packages/wwv-cli/dist/index.js create` (creates inside `local-plugins/` by default, or `packages/` if `--core` is used).
 - **Develop**: `pnpm dev` triggers hot-reloading via `dev:plugins` watch script.
 - **Publish**: `node packages/wwv-cli/dist/index.js publish <name> [--org <your-org>]` publishes the plugin from the project root. Commit and push from inside `local-plugins/` to contribute back to the community repo.
 
