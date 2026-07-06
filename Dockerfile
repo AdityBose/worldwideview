@@ -128,6 +128,13 @@ COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN sed -i 's/\r$//' ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
+LABEL org.opencontainers.image.title="WorldWideView"
+LABEL org.opencontainers.image.description="Real-time geospatial intelligence engine — visualize live global events, conflicts, and satellite data on an interactive 3D globe"
+LABEL org.opencontainers.image.url="https://worldwideview.dev"
+LABEL org.opencontainers.image.source="https://github.com/silvertakana/worldwideview"
+LABEL org.opencontainers.image.licenses="EL-2.0"
+LABEL org.opencontainers.image.vendor="WorldWideView"
+
 EXPOSE 3000 3001
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

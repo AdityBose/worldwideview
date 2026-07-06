@@ -53,9 +53,9 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         {children}
-        {process.env.NEXT_PUBLIC_WWV_ANALYTICS === "true" && (
+        {process.env.NEXT_PUBLIC_WWV_ANALYTICS === "true" && process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL && (
           <Script
-            src="https://analytics.worldwideview.dev/script.js"
+            src={process.env.NEXT_PUBLIC_ANALYTICS_SCRIPT_URL}
             data-website-id="2c8f6c09-2651-4a2a-af99-b8cee1612b9a"
             strategy="afterInteractive"
           />

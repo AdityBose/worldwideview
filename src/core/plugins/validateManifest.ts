@@ -121,7 +121,7 @@ export function validateManifest(
         }
 
         if (!isRelative && !isAllowedHost) {
-            errors.push("entry URL must be a relative path, CDN, localhost, or worldwideview.dev domain");
+            errors.push("entry URL must be a relative path, CDN, localhost, or worldwideview.dev domain"); // lint-url: allow (validation rule, not a URL)
         }
     }
 

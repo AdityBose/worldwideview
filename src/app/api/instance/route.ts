@@ -8,12 +8,15 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const email = searchParams.get("email");
 
     if (!userId) {
         return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    const memberships = await prisma.workspaceMember.findMany({
+    // If no memberships found by Supabase userId, fall back to email lookup
+    // (workspace_members stores BetterAuth user ID, not Supabase UUID)
+    let memberships = await prisma.workspaceMember.findMany({
         where: { userId },
         include: {
             workspace: true,
@@ -22,6 +25,24 @@ export async function GET(request: Request) {
             joinedAt: "asc",
         },
     });
+
+    if (memberships.length === 0 && email) {
+        const betterAuthUser = await prisma.betterAuthUser.findUnique({
+            where: { email },
+            select: { id: true },
+        });
+        if (betterAuthUser) {
+            memberships = await prisma.workspaceMember.findMany({
+                where: { userId: betterAuthUser.id },
+                include: {
+                    workspace: true,
+                },
+                orderBy: {
+                    joinedAt: "asc",
+                },
+            });
+        }
+    }
 
     const instances = memberships.map((m) => ({
         id: m.workspace.id,
@@ -52,6 +73,7 @@ export async function POST(request: Request) {
         name?: string;
         userId?: string;
         email?: string;
+        tier?: string;
     };
 
     if (!body.subdomain) {
@@ -74,20 +96,42 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Subdomain already taken" }, { status: 409 });
     }
 
+    // Auto-create user if not found (hub has already verified)
+    let user = await prisma.betterAuthUser.findUnique({ where: { id: body.userId } });
+    if (!user && body.email) {
+        user = await prisma.betterAuthUser.findUnique({ where: { email: body.email } });
+    }
+    if (!user && body.email) {
+        user = await prisma.betterAuthUser.create({
+            data: {
+                id: body.userId,
+                name: body.email.split("@")[0],
+                email: body.email,
+                emailVerified: true,
+            },
+        });
+    }
+
+    if (!user) {
+        return NextResponse.json({ error: "User not found and could not be created" }, { status: 400 });
+    }
+
     const workspace = await prisma.workspace.create({
         data: {
             name: body.name || subdomain,
             subdomain,
-            ownerId: body.userId,
+            ownerId: user.id,
             status: "active",
             plan: "basic",
+            tier: body.tier || "free",
+            tierStampedAt: new Date(),
         },
     });
 
     await prisma.workspaceMember.create({
         data: {
             workspaceId: workspace.id,
-            userId: body.userId,
+            userId: user.id,
             role: "owner",
         },
     });
@@ -98,6 +142,7 @@ export async function POST(request: Request) {
         subdomain: workspace.subdomain,
         status: workspace.status,
         plan: workspace.plan,
+        tier: workspace.tier,
         createdAt: workspace.createdAt,
     });
 }

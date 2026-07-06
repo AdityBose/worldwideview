@@ -4,7 +4,10 @@ import type { NextRequest } from "next/server";
 import { isDemo } from "@/core/edition";
 import { hasBetterAuthCookie } from "@/lib/proxy-auth";
 
-const workspaceCache = new Map<string, { status: string; expiresAt: number }>();
+const HUB_REDIRECT_URL = process.env.NEXT_PUBLIC_HUB_REDIRECT_URL ?? "https://worldwideview.dev/hub"
+const TENANT_DOMAIN = process.env.NEXT_PUBLIC_WWV_TENANT_DOMAIN ?? ".app.worldwideview.dev"
+
+const workspaceCache = new Map<string, { status: string; plan: string; tier: string; locked: boolean; lockedReason: string | null; expiresAt: number }>();
 const CACHE_TTL = 60_000; // 60 seconds
 
 // Anchored static-asset allowlist. Only requests ending in a real asset
@@ -25,21 +28,23 @@ const STATIC_ASSET_RE = /\.(?:js|mjs|cjs|css|map|json|txt|xml|webmanifest|ico|pn
 //    before their own auth runs, breaking install/manage from the marketplace origin.
 //  - glitchtip-tunnel/build/dev: telemetry/diagnostics (dev/* is NODE_ENV-gated to 403 in prod).
 const PUBLIC_API_PREFIXES = [
+    "/api/access-code",
     "/api/auth",
     "/api/ba",
-    "/api/internal/workspace",
-    "/api/health",
     "/api/billing/webhook",
-    "/api/mcp",
-    "/api/globe",
-    "/api/v1/entities",
-    "/api/places",
-    "/api/marketplace",
-    "/api/glitchtip-tunnel",
     "/api/build",
     "/api/dev",
-    "/api/service",
+    "/api/glitchtip-tunnel",
+    "/api/globe",
+    "/api/health",
+    "/api/instance",
+    "/api/internal/workspace",
+    "/api/marketplace",
+    "/api/mcp",
+    "/api/places",
     "/api/provision",
+    "/api/service",
+    "/api/v1/entities",
 ];
 
 function isPublicApiPath(path: string): boolean {
@@ -85,9 +90,9 @@ export default async function proxy(req: NextRequest) {
     const isCloudDeploy = process.env.NEXT_PUBLIC_WWV_EDITION === "cloud";
 
     if (isCloudDeploy) {
-        const isApp = hostname.includes(".app.worldwideview.dev") || hostname.includes(".localhost");
+        const isApp = hostname.includes(TENANT_DOMAIN) || hostname.includes(".localhost");
         if (isApp) {
-            const subdomain = hostname.replace(".app.worldwideview.dev", "").replace(".localhost", "").split(":")[0];
+            const subdomain = hostname.replace(TENANT_DOMAIN, "").replace(".localhost", "").split(":")[0];
             if (subdomain && subdomain !== "app" && subdomain !== "localhost") {
                 tenantSubdomain = subdomain;
             }
@@ -161,10 +166,21 @@ export default async function proxy(req: NextRequest) {
         if (workspaceInfo.status === "suspended" && !path.startsWith("/suspended")) {
             return NextResponse.redirect(new URL("/suspended", req.url));
         }
+        if (workspaceInfo.locked && !path.startsWith("/locked")) {
+            if (path.startsWith("/api/")) {
+                return new NextResponse(
+                    JSON.stringify({ error: "Workspace locked", reason: workspaceInfo.lockedReason }),
+                    { status: 403, headers: { "Content-Type": "application/json" } },
+                );
+            }
+            const lockUrl = new URL("/locked", req.url);
+            lockUrl.searchParams.set("reason", workspaceInfo.lockedReason || "This workspace is locked. Contact the workspace owner.");
+            return NextResponse.redirect(lockUrl);
+        }
     }
 
     // Auth pages: always accessible
-    if (path.startsWith("/setup") || path.startsWith("/login")) {
+    if (path.startsWith("/setup") || path.startsWith("/login") || path.startsWith("/locked")) {
         const res = NextResponse.next();
         if (tenantSubdomain) res.headers.set("x-tenant-subdomain", tenantSubdomain);
         return res;
@@ -173,8 +189,9 @@ export default async function proxy(req: NextRequest) {
     // Root Domain (Control Plane) Routing
     if (isCloudDeploy && !tenantSubdomain) {
         // Redirect apex app domain to the external marketing/hub site
-        if (path === "/" || path === "/register" || path === "/dashboard" || path === "/create-workspace") {
-            return NextResponse.redirect("https://worldwideview.dev/hub");
+        // Empty HUB_REDIRECT_URL means skip redirect entirely (local dev mode)
+        if (HUB_REDIRECT_URL && (path === "/" || path === "/register" || path === "/dashboard" || path === "/create-workspace")) {
+            return NextResponse.redirect(HUB_REDIRECT_URL);
         }
     }
 

@@ -1,6 +1,10 @@
 name: Playwright Tests
 # Only run E2E tests when application code actually changes.
-# Doc/agent-rules/config-only changes skip the full 3-browser matrix.
+# Doc/agent-rules/config-only changes skip the full suite.
+# Chromium always runs. Firefox and WebKit run conditionally:
+#   - Always on push to main (full coverage before release)
+#   - On PRs when browser-impacting paths change (globe, CSS, auth, test files)
+#   - On PRs with explicit needs-firefox / needs-webkit labels
 # Skipped workflow runs satisfy GitHub required status checks (neutral pass).
 on:
   push:
@@ -34,17 +38,117 @@ concurrency:
 
 permissions:
   contents: read
+
 jobs:
-  test:
-    timeout-minutes: 60
+  # ── Detection: which non-Chromium browsers need to run? ──────────────
+  check:
+    name: Check Browser Need
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
+    timeout-minutes: 5
+    outputs:
+      run-firefox: ${{ steps.check.outputs.run-firefox }}
+      run-webkit: ${{ steps.check.outputs.run-webkit }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            browser-impact:
+              - 'src/core/globe/**'
+              - 'src/**/*.css'
+              - 'src/lib/auth/**'
+              - 'src/app/api/auth/**'
+              - 'playwright.config.ts'
+              - '.github/workflows/playwright.yml'
+              - 'tests/**'
+              - 'prisma/**'
+
+      - name: Evaluate browser need
+        id: check
+        shell: bash
+        run: |
+          IS_PUSH="${{ github.event_name == 'push' }}"
+          HAS_IMPACT="${{ steps.filter.outputs.browser-impact }}"
+
+          # Label checks only apply to pull_request events
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            HAS_FF_LABEL="${{ contains(github.event.pull_request.labels.*.name, 'needs-firefox') && 'true' || 'false' }}"
+            HAS_WK_LABEL="${{ contains(github.event.pull_request.labels.*.name, 'needs-webkit') && 'true' || 'false' }}"
+          else
+            HAS_FF_LABEL="false"
+            HAS_WK_LABEL="false"
+          fi
+
+          # Firefox: push to main OR browser-impact paths changed OR needs-firefox label
+          if [ "$IS_PUSH" = "true" ] || [ "$HAS_IMPACT" = "true" ] || [ "$HAS_FF_LABEL" = "true" ]; then
+            echo "run-firefox=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run-firefox=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # WebKit: push to main OR browser-impact paths changed OR needs-webkit label
+          if [ "$IS_PUSH" = "true" ] || [ "$HAS_IMPACT" = "true" ] || [ "$HAS_WK_LABEL" = "true" ]; then
+            echo "run-webkit=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run-webkit=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Chromium — always runs ──────────────────────────────────────────
+  chromium:
+    name: Playwright (chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
     - uses: actions/checkout@v7
-    
+
+    - uses: pnpm/action-setup@v6
+      with:
+        version: 9.15.4
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 20
+        cache: 'pnpm'
+
+    - name: Install dependencies
+      run: pnpm install
+
+    - name: Install Playwright Browsers
+      run: pnpm exec playwright install --with-deps
+
+    - name: Run Project Setup
+      run: pnpm run setup
+
+    - name: Boot Database
+      run: |
+        docker network create coolify || true
+        pnpm run predev
+
+    - name: Run Playwright tests
+      env:
+        BETTER_AUTH_SECRET: test-better-auth-secret-at-least-32-chars!
+        CROSS_SERVICE_SECRET: test-cross-service-secret-for-e2e
+      run: pnpm test:e2e --project=chromium
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report-chromium
+        path: playwright-report/
+        retention-days: 30
+
+  # ── Firefox — conditional ───────────────────────────────────────────
+  firefox:
+    name: Playwright (firefox)
+    if: needs.check.outputs.run-firefox == 'true'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v7
+
     - uses: pnpm/action-setup@v6
       with:
         version: 9.15.4
@@ -73,19 +177,60 @@ jobs:
         # Prevent Firefox from loading the AT-SPI/MSAA accessibility bridge on
         # Linux CI — without this, Firefox hangs for ~20 min waiting for a bus
         # that doesn't exist on ubuntu-latest runners.
-        NO_AT_BRIDGE: ${{ matrix.browser == 'firefox' && '1' || '0' }}
-        # Better Auth secret for HMAC-SHA256 session cookie signing/validation.
-        # Must match the value used by the Next.js app in the Docker Compose stack.
-        # A non-empty string of sufficient length — not sensitive in test CI.
+        NO_AT_BRIDGE: '1'
         BETTER_AUTH_SECRET: test-better-auth-secret-at-least-32-chars!
-        # Cross-service HMAC secret for hub <-> globe communication.
-        # Must match the value in playwright.config.ts webServer env.
         CROSS_SERVICE_SECRET: test-cross-service-secret-for-e2e
-      run: pnpm test:e2e --project=${{ matrix.browser }}
-      
+      run: pnpm test:e2e --project=firefox
+
     - uses: actions/upload-artifact@v7
       if: ${{ !cancelled() }}
       with:
-        name: playwright-report-${{ matrix.browser }}
+        name: playwright-report-firefox
+        path: playwright-report/
+        retention-days: 30
+
+  # ── WebKit — conditional ────────────────────────────────────────────
+  webkit:
+    name: Playwright (webkit)
+    if: needs.check.outputs.run-webkit == 'true'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v7
+
+    - uses: pnpm/action-setup@v6
+      with:
+        version: 9.15.4
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 20
+        cache: 'pnpm'
+
+    - name: Install dependencies
+      run: pnpm install
+
+    - name: Install Playwright Browsers
+      run: pnpm exec playwright install --with-deps
+
+    - name: Run Project Setup
+      run: pnpm run setup
+
+    - name: Boot Database
+      run: |
+        docker network create coolify || true
+        pnpm run predev
+
+    - name: Run Playwright tests
+      env:
+        BETTER_AUTH_SECRET: test-better-auth-secret-at-least-32-chars!
+        CROSS_SERVICE_SECRET: test-cross-service-secret-for-e2e
+      run: pnpm test:e2e --project=webkit
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report-webkit
         path: playwright-report/
         retention-days: 30
