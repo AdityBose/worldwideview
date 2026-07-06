@@ -465,5 +465,4 @@ jobs:
           docker buildx imagetools create \
             -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:demo \
             -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:demo-${{ github.sha }} \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-demo-amd64.outputs.digest }}\
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-demo-arm64.outputs.digest }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ needs.build-demo-amd64.outputs.digest }}
