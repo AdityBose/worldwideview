@@ -16,10 +16,18 @@ import { createAuthClient } from "better-auth/react";
 /**
  * Get the base URL for the auth server.
  *
- * Reads from NEXT_PUBLIC_APP_URL env var, falls back to localhost:3000.
+ * In browser context, uses window.location.origin to automatically resolve
+ * the correct domain for multi-tenant cloud instances (each instance has
+ * its own subdomain like tester.cloud-wwv.dev).
+ *
+ * Falls back to NEXT_PUBLIC_APP_URL env var (for explicit config), then
+ * localhost:3000 (for local dev without env file).
  * Trailing slashes are stripped for consistency.
  */
 function resolveBaseUrl(): string {
+    if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_APP_URL) {
+        return window.location.origin.replace(/\/+$/, "");
+    }
     const raw = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     return raw.replace(/\/+$/, "");
 }
