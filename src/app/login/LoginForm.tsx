@@ -41,6 +41,8 @@ export default function LoginForm() {
         });
 
         if (signInError) {
+            console.warn('[login] sign-in failed', { code: signInError.code, message: signInError.message });
+
             // Try migrating legacy NextAuth user to Better Auth
             const migrated = await migrateLegacyUserIfNeeded(email, password);
             if (migrated) {
@@ -51,12 +53,11 @@ export default function LoginForm() {
                     callbackURL: getSafeRedirect(next),
                 });
                 if (retryError) {
-                    console.error("[Login] Retry sign-in error after migration:", retryError.message);
+                    console.warn('[login] sign-in retry failed', { code: retryError.code, message: retryError.message });
                     setError("Sign in failed after migration. Try again.");
                 }
                 // On retry success, Better Auth redirects
             } else {
-                console.error("[Login] Sign-in error:", signInError.message);
                 setError("Sign in failed. Check your credentials and try again.");
             }
             setLoading(false);

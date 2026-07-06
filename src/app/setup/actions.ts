@@ -156,6 +156,8 @@ export async function activateProvisionedAccount(
     email: string,
     password: string,
 ): Promise<SetupResult> {
+    console.log('[setup] start', { hasToken: !!token, email });
+
     if (!name || !email || !password) {
         return { success: false, error: "All fields are required." };
     }
@@ -167,47 +169,53 @@ export async function activateProvisionedAccount(
         return { success: false, error: "Password must be at least 8 characters." };
     }
 
-    const record = await consumeSetupToken(token);
-    if (!record) {
-        return { success: false, error: "Invalid or expired setup link." };
+    try {
+        const record = await consumeSetupToken(token);
+        if (!record) {
+            return { success: false, error: "Invalid or expired setup link." };
+        }
+        console.log('[setup] token consumed', { userId: record.userId });
+
+        const hashedPassword = await hashPassword(password);
+        console.log('[setup] password hashed');
+
+        const [, accountResult] = await prisma.$transaction([
+            prisma.betterAuthUser.update({
+                where: { id: record.userId },
+                data: {
+                    name,
+                    email: email.trim().toLowerCase(),
+                    emailVerified: true,
+                },
+            }),
+            prisma.betterAuthAccount.updateMany({
+                where: {
+                    userId: record.userId,
+                    providerId: "credential",
+                },
+                data: { password: hashedPassword },
+            }),
+        ]);
+
+        console.log('[setup] account rows updated', { count: accountResult.count });
+
+        if (accountResult.count === 0) {
+            console.warn('[setup] no credential account - creating one');
+            await prisma.betterAuthAccount.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    accountId: email.trim().toLowerCase(),
+                    providerId: "credential",
+                    userId: record.userId,
+                    password: hashedPassword,
+                },
+            });
+        }
+
+        console.log('[setup] success');
+        return { success: true };
+    } catch (error) {
+        console.error('[setup] error', { message: error instanceof Error ? error.message : String(error) });
+        return { success: false, error: "An unexpected error occurred. Please try again." };
     }
-
-    const hashedPassword = await hashPassword(password);
-
-    const [, accountResult] = await prisma.$transaction([
-        prisma.betterAuthUser.update({
-            where: { id: record.userId },
-            data: {
-                name,
-                email: email.trim().toLowerCase(),
-                emailVerified: true,
-            },
-        }),
-        prisma.betterAuthAccount.updateMany({
-            where: {
-                userId: record.userId,
-                providerId: "credential",
-            },
-            data: { password: hashedPassword },
-        }),
-    ]);
-
-    // Log diagnostic info
-    console.log("[Setup] Account rows updated:", accountResult.count);
-
-    // If no credential account existed (e.g., provision didn't create one),
-    // create it now so login doesn't fail
-    if (accountResult.count === 0) {
-        await prisma.betterAuthAccount.create({
-            data: {
-                id: crypto.randomUUID(),
-                accountId: email.trim().toLowerCase(),
-                providerId: "credential",
-                userId: record.userId,
-                password: hashedPassword,
-            },
-        });
-    }
-
-    return { success: true };
 }
