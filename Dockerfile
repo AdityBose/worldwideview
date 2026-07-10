@@ -93,6 +93,7 @@ RUN npm install -g prisma@7.5.0 pm2@latest
 
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
+ENV NODE_OPTIONS=--max-old-space-size=768
 ENV PORT=3000
 # DATABASE_URL must be provided via environment variable (no default)
 # Example: postgresql://user:pass@host:5432/dbname
