@@ -16,6 +16,12 @@ vi.mock("@/lib/db", () => ({
             findUnique: vi.fn(),
             create: vi.fn(),
         },
+        betterAuthAccount: {
+            create: vi.fn(),
+        },
+        setupToken: {
+            create: vi.fn(),
+        },
     },
 }));
 
@@ -188,6 +194,14 @@ describe("POST /api/instance", () => {
         vi.mocked(prisma.betterAuthUser.create).mockResolvedValue({
             id: "u1-new", name: "a", email: "a@b.com", emailVerified: true,
         } as never);
+        vi.mocked(prisma.betterAuthAccount.create).mockResolvedValue({
+            id: "acc-1", userId: "u1-new", accountId: "a@b.com",
+            providerId: "credential", password: "hashed",
+        } as never);
+        vi.mocked(prisma.setupToken.create).mockResolvedValue({
+            id: "st-1", tokenHash: "hash", userId: "u1-new",
+            organizationId: null, expiresAt: new Date(), usedAt: null, createdAt: new Date(),
+        } as never);
         vi.mocked(prisma.workspace.create).mockResolvedValue({
             id: "new-ws", name: "Test", subdomain: "test-ws",
             status: "active", plan: "basic", tier: "free", ownerId: "u1",
@@ -209,6 +223,14 @@ describe("POST /api/instance", () => {
                 name: "a",
                 email: "a@b.com",
                 emailVerified: true,
+            },
+        });
+        expect(prisma.betterAuthAccount.create).toHaveBeenCalledWith({
+            data: {
+                userId: "u1-new",
+                accountId: "a@b.com",
+                providerId: "credential",
+                password: expect.any(String),
             },
         });
         expect(data.tier).toBe("free");
