@@ -2,10 +2,18 @@ import { NextResponse } from "next/server";
 import { getInstalledPlugins } from "@/lib/marketplace/repository";
 import { getClientIp } from "@/lib/rateLimit";
 import { marketplaceApiLimiter } from "@/lib/rateLimiters";
+import { isPluginInstallEnabled } from "@/core/edition";
 
 const MARKETPLACE_URL = process.env.NEXT_PUBLIC_MARKETPLACE_URL || "https://marketplace.worldwideview.dev";
 
 export async function GET(request: Request) {
+    if (!isPluginInstallEnabled) {
+        return NextResponse.json(
+            { error: "Plugin management is disabled on this instance" },
+            { status: 403 },
+        );
+    }
+
     const rateLimited = marketplaceApiLimiter.check(getClientIp(request));
     if (rateLimited) return rateLimited;
 

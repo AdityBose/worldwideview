@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { Plug, PlugZap } from "lucide-react";
-import { isDemo } from "@/core/edition";
+
 import styles from "./MarketplaceConnect.module.css";
 
 // ─── Types ──────────────────────────────────────────────────
@@ -30,15 +30,9 @@ type Status =
 // ─── Component ──────────────────────────────────────────────
 
 export function MarketplaceConnect() {
-    const [status, setStatus] = useState<Status>(() =>
-        isDemo
-            ? { kind: "unavailable", reason: "Not available on demo edition" }
-            : { kind: "loading" },
-    );
+    const [status, setStatus] = useState<Status>({ kind: "loading" });
 
     useEffect(() => {
-        if (isDemo) return;
-
         let cancelled = false;
         fetch("/api/marketplace/status")
             .then((r) => r.json())

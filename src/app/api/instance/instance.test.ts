@@ -16,6 +16,12 @@ vi.mock("@/lib/db", () => ({
             findUnique: vi.fn(),
             create: vi.fn(),
         },
+        betterAuthAccount: {
+            create: vi.fn(),
+        },
+        setupToken: {
+            create: vi.fn(),
+        },
     },
 }));
 
@@ -211,6 +217,7 @@ describe("POST /api/instance", () => {
                 emailVerified: true,
             },
         });
+        expect(prisma.betterAuthAccount.create).toHaveBeenCalledOnce();
         expect(data.tier).toBe("free");
     });
 });
