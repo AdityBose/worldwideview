@@ -68,7 +68,7 @@ export function createOsmProvider() {
 
 function createGoogleProvider(lyrs: string) {
     return new UrlTemplateImageryProvider({
-        url: `https://mt{s}.google.com/vt/lyrs=${lyrs}&x={x}&y={y}&z={z}`,
+        url: `https://mt{s}.google.com/vt/lyrs=${lyrs}&hl=en&x={x}&y={y}&z={z}`,
         subdomains: ["0", "1", "2", "3"]
     });
 }
@@ -101,6 +101,7 @@ export async function createImageryProvider(layerId: string) {
                 return await BingMapsImageryProvider.fromUrl("https://dev.virtualearth.net", {
                     key: bingKey,
                     mapStyle: BingMapsStyle.AERIAL,
+                    culture: process.env.NEXT_PUBLIC_BING_MAPS_CULTURE || "en-US",
                 });
             }
             return await tieredFallback(2, "s");
@@ -110,6 +111,7 @@ export async function createImageryProvider(layerId: string) {
                 return await BingMapsImageryProvider.fromUrl("https://dev.virtualearth.net", {
                     key: bingKey,
                     mapStyle: BingMapsStyle.AERIAL_WITH_LABELS,
+                    culture: process.env.NEXT_PUBLIC_BING_MAPS_CULTURE || "en-US",
                 });
             }
             return await tieredFallback(3, "y");
@@ -119,6 +121,7 @@ export async function createImageryProvider(layerId: string) {
                 return await BingMapsImageryProvider.fromUrl("https://dev.virtualearth.net", {
                     key: bingKey,
                     mapStyle: BingMapsStyle.ROAD,
+                    culture: process.env.NEXT_PUBLIC_BING_MAPS_CULTURE || "en-US",
                 });
             }
             return await tieredFallback(4, "m");
