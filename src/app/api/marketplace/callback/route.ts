@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         return redirectWith({ error: "missing_verifier" }, req);
     }
 
-    const mpUrl = process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL || "https://app.worldwideview.dev";
+    const mpUrl = process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL || "https://marketplace.worldwideview.dev";
     const issuer = new URL(mpUrl);
 
     try {
