@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
     const code_verifier = client.randomPKCECodeVerifier();
     const code_challenge = await client.calculatePKCECodeChallenge(code_verifier);
 
-    const marketplaceUrl = process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL || "https://app.worldwideview.dev";
+    const marketplaceUrl = process.env.NEXT_PUBLIC_WWV_MARKETPLACE_URL || "https://marketplace.worldwideview.dev";
 
     const url = new URL("/oauth/authorize", marketplaceUrl);
     url.searchParams.set("client_id", "local-app");
