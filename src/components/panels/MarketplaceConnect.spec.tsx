@@ -2,11 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MarketplaceConnect } from "./MarketplaceConnect";
 
-// Mock edition module — default to non-demo
-vi.mock("@/core/edition", () => ({
-    isDemo: false,
-}));
-
 // Mock global fetch
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;

@@ -74,14 +74,14 @@ export default function LoginForm() {
 
           <form onSubmit={handleSubmit} method="post" className={styles.form}>
             <label className={styles.label} htmlFor="email">
-              {isDemo ? "Username" : "Email"}
+              Email
               <input
                 id="email"
                 name="email"
-                type={isDemo ? "text" : "email"}
+                type="email"
                 required
                 className={styles.input}
-                placeholder={isDemo ? "admin" : "admin@example.com"}
+                placeholder={isDemo ? "admin@worldwideview.local" : "admin@example.com"}
               />
             </label>
 

@@ -72,13 +72,18 @@ export function isHttpsDeployment(): boolean {
 
 /**
  * Server-side secret used as the admin password on the demo edition.
- * Set `WWV_DEMO_ADMIN_SECRET` in `.env` — never use `NEXT_PUBLIC_`.
+ * Checks multiple env vars for backward compatibility with migration:
+ *   `WWV_ADMIN_PASSWORD` (preferred) → `ADMIN_PASSWORD` → `WWV_DEMO_ADMIN_SECRET` (legacy).
+ * Never use `NEXT_PUBLIC_` prefix.
  * When configured on demo, enables plugin management for the instance.
  */
-const DEMO_ADMIN_SECRET: string | undefined = process.env.WWV_DEMO_ADMIN_SECRET?.trim() || undefined;
+const ADMIN_PASSWORD: string | undefined =
+    (process.env.WWV_ADMIN_PASSWORD?.trim() ||
+     process.env.ADMIN_PASSWORD?.trim() ||
+     process.env.WWV_DEMO_ADMIN_SECRET?.trim()) || undefined;
 
 /** True when demo edition has an admin secret configured. */
-export const isDemoAdminConfigured: boolean = isDemo && !!DEMO_ADMIN_SECRET;
+export const isDemoAdminConfigured: boolean = isDemo && !!ADMIN_PASSWORD;
 
 // ---------------------------------------------------------------------------
 // Feature flags (derived from edition)
@@ -111,7 +116,7 @@ export const isHistoryEnabled: boolean = !isDemo;
  */
 export function getDemoAdminSecret(): string | undefined {
     if (!isDemo) return undefined;
-    return DEMO_ADMIN_SECRET;
+    return ADMIN_PASSWORD;
 }
 
 /** Demo admin session role constant. */

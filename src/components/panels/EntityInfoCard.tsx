@@ -71,7 +71,7 @@ export function EntityInfoCard() {
 
     // Format values
     const {altitude} = hoveredEntity;
-    const altitudeDisplay = altitude !== undefined ? `${(altitude / 10).toFixed(0)} m` : null;
+    const altitudeDisplay = altitude !== undefined ? `${altitude.toFixed(0)} m` : null;
 
     const {speed} = hoveredEntity;
     const speedDisplay = speed !== undefined ? `${speed.toFixed(0)} m/s` : null;

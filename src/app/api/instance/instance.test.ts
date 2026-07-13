@@ -233,6 +233,7 @@ describe("POST /api/instance", () => {
                 password: expect.any(String),
             },
         });
+        expect(prisma.betterAuthAccount.create).toHaveBeenCalledOnce();
         expect(data.tier).toBe("free");
     });
 });
