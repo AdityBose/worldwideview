@@ -47,8 +47,8 @@ export async function seedDefaultPlugins(): Promise<void> {
             return;
         }
 
-        const autoSeedPlugins = (await getRegistryPluginList()).filter((p) => p.autoSeed);
-        if (autoSeedPlugins.length === 0) {
+        const allAutoSeed = (await getRegistryPluginList()).filter((p) => p.autoSeed);
+        if (allAutoSeed.length === 0) {
             // Registry unreachable / signature failed / empty — defer so the
             // next request retries instead of locking in an empty fresh install.
             console.warn(
@@ -57,8 +57,21 @@ export async function seedDefaultPlugins(): Promise<void> {
             return;
         }
 
+        // Restrict to a curated subset if DEFAULT_PLUGINS is set (comma-separated IDs)
+        const curatedList = process.env.DEFAULT_PLUGINS;
+        const autoSeedPlugins = curatedList
+            ? allAutoSeed.filter((p) => curatedList.split(",").map((s) => s.trim()).includes(p.id))
+            : allAutoSeed;
+
+        if (autoSeedPlugins.length === 0) {
+            console.warn(
+                `[DefaultPlugins] DEFAULT_PLUGINS="${curatedList}" matched zero registry plugins — deferring seed`,
+            );
+            return;
+        }
+
         console.log(
-            `[DefaultPlugins] Fresh install detected — seeding ${autoSeedPlugins.length} auto-seed plugins\u2026`,
+            `[DefaultPlugins] Fresh install detected — seeding ${autoSeedPlugins.length}/${allAutoSeed.length} auto-seed plugins${curatedList ? " (curated)" : ""}\u2026`,
         );
 
         let installed = 0;
