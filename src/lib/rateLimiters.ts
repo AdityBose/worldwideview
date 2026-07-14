@@ -60,6 +60,12 @@ export const globeCommandsStreamLimiter = new RateLimiter({
     maxRequests: 10,
 });
 
+/** /api/plugins/osm-search — prevents abuse of Overpass API proxy (30 req/min for interactive search). */
+export const osmSearchLimiter = new RateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+});
+
 /** /api/mcp — prevents scan/DoS before the expensive auth layer runs. */
 export const mcpLimiter = new RateLimiter({
     windowMs: 60_000,
@@ -88,4 +94,10 @@ export const mcpInvocationsLimiter = new RateLimiter({
 export const mcpResultsLimiter = new RateLimiter({
     windowMs: 60_000,
     maxRequests: 60,
+});
+
+/** /api/feedback -- low-volume human-only feedback submissions. */
+export const feedbackLimiter = new RateLimiter({
+    windowMs: 60_000,
+    maxRequests: 5,
 });

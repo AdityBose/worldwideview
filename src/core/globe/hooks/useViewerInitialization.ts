@@ -106,12 +106,16 @@ export function useViewerInitialization(sceneSettings: any) {
                     googleLoaded = true;
                 } catch (err: any) {
                     console.error("[GlobeView] Failed to initialize Google 3D Tiles:", err);
+                    useStore.getState().showErrorToast?.("3D terrain requires a Google Maps API key. Falling back to 2D imagery.");
                 }
             }
 
             if (!googleLoaded) {
                  if (useStore.getState().mapConfig.baseLayerId === "google-3d") {
-                      useStore.getState().updateMapConfig({ fallbackLayerId: "bing-aerial" });
+                       useStore.getState().updateMapConfig({ fallbackLayerId: "bing-aerial" });
+                 }
+                 if (!activeKey || activeKey.length < 20) {
+                     useStore.getState().showErrorToast?.("Google Maps 3D is not available. No valid API key configured.");
                  }
                  clearTimeout(globalTimeout);
                  fireGlobeReady();

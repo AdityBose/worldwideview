@@ -132,9 +132,7 @@ export function FeedbackDialog() {
                 timestamp: new Date().toISOString(),
             };
 
-            const webhookUrl = process.env.NEXT_PUBLIC_FEEDBACK_WEBHOOK_URL || "https://n8n.arfquant.com/webhook/feedback";
-
-            const response = await fetch(webhookUrl, {
+            const response = await fetch("/api/feedback", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
