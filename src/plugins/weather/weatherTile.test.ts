@@ -2,7 +2,7 @@
 import {
     beforeEach, describe, expect, it, vi
 } from "vitest";
-import { GET } from "@/app/api/weather/tile/[z]/[x]/[y]/route";
+import { GET, _resetRateLimiterAndCache } from "@/app/api/weather/tile/[z]/[x]/[y]/route";
 import { NextRequest } from "next/server";
 
 function makeRequest(layer: string | null, z = "3", x = "4", y = "2") {
@@ -19,6 +19,7 @@ describe("/api/weather/tile/[z]/[x]/[y]", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         vi.stubEnv("OPENWEATHERMAP_API_KEY", "test-key-123");
+        _resetRateLimiterAndCache();
     });
 
     it("proxies a valid tile request and returns PNG", async () => {
@@ -197,5 +198,83 @@ describe("/api/weather/tile/[z]/[x]/[y]", () => {
             const response = await GET(req, { params });
             expect(response.status).toBe(200);
         }
+    });
+
+    it("serves duplicate tile from in-memory cache without calling fetch again", async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            arrayBuffer: async () => fakePng.buffer,
+        });
+        vi.stubGlobal("fetch", mockFetch);
+
+        const { req: req1, params: params1 } = makeRequest("clouds_new", "3", "4", "2");
+        const res1 = await GET(req1, { params: params1 });
+        expect(res1.status).toBe(200);
+        expect(res1.headers.get("X-Cache-Hit")).toBe("false");
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+
+        const { req: req2, params: params2 } = makeRequest("clouds_new", "3", "4", "2");
+        const res2 = await GET(req2, { params: params2 });
+        expect(res2.status).toBe(200);
+        expect(res2.headers.get("X-Cache-Hit")).toBe("true");
+        expect(mockFetch).toHaveBeenCalledTimes(1); // fetch not called a second time
+    });
+
+    it("coalesces concurrent misses for the same tile into one upstream fetch", async () => {
+        let resolveFetch: ((value: { ok: boolean; arrayBuffer: () => Promise<ArrayBuffer> }) => void) | undefined;
+        const mockFetch = vi.fn().mockImplementation(
+            () =>
+                new Promise((resolve) => {
+                    resolveFetch = resolve;
+                }),
+        );
+        vi.stubGlobal("fetch", mockFetch);
+
+        const a = makeRequest("clouds_new", "3", "4", "2");
+        const b = makeRequest("clouds_new", "3", "4", "2");
+        const p1 = GET(a.req, { params: a.params });
+        const p2 = GET(b.req, { params: b.params });
+
+        // Both requests should share one in-flight upstream call.
+        await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+
+        resolveFetch?.({
+            ok: true,
+            arrayBuffer: async () => fakePng.buffer,
+        });
+
+        const [res1, res2] = await Promise.all([p1, p2]);
+        expect(res1.status).toBe(200);
+        expect(res2.status).toBe(200);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("enforces rate limit of 1000 calls per 32 hours and returns 429", async () => {
+        const mockFetch = vi.fn().mockResolvedValue({
+            ok: true,
+            arrayBuffer: async () => fakePng.buffer,
+        });
+        vi.stubGlobal("fetch", mockFetch);
+
+        // Exhaust the 1000-call quota with unique tile coordinates
+        for (let i = 0; i < 1000; i++) {
+            const z = "10";
+            const x = String(i % 100);
+            const y = String(Math.floor(i / 100));
+            const { req, params } = makeRequest("temp_new", z, x, y);
+            const res = await GET(req, { params });
+            expect(res.status).toBe(200);
+        }
+
+        expect(mockFetch).toHaveBeenCalledTimes(1000);
+
+        // The 1001st unique call should trigger HTTP 429
+        const { req: reqBlocked, params: paramsBlocked } = makeRequest("temp_new", "10", "101", "101");
+        const resBlocked = await GET(reqBlocked, { params: paramsBlocked });
+        const json = await resBlocked.json();
+
+        expect(resBlocked.status).toBe(429);
+        expect(json.error).toContain("Weather API rate limit reached (max 1000 calls per 32 hours)");
+        expect(mockFetch).toHaveBeenCalledTimes(1000); // no extra fetch call made
     });
 });

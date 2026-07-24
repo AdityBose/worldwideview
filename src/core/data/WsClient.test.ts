@@ -20,14 +20,19 @@ vi.mock("../plugins/PluginManager", () => ({
   },
 }));
 
-// Mock Store
+// Mock Store — currentViewport non-null so maritime paint gate allows dataUpdated
 vi.mock("../state/store", () => ({
   useStore: {
     getState: vi.fn(() => ({
       entitiesByPlugin: {},
+      currentViewport: [1, 2, 3, 4] as [number, number, number, number],
       setLayerLoading: vi.fn(),
     })),
   },
+}));
+
+vi.mock("./CacheLayer", () => ({
+  cacheLayer: { invalidate: vi.fn(), get: vi.fn(), set: vi.fn() },
 }));
 
 describe("WsClient", () => {
@@ -152,6 +157,68 @@ describe("WsClient", () => {
     expect(mockPlugin.mapWebsocketPayload).toHaveBeenCalled();
     expect(dataBus.emit).toHaveBeenCalledWith("dataUpdated", expect.objectContaining({
       entities: [expect.objectContaining({ custom: true })]
+    }));
+  });
+
+  it("maps maritime MMSI fleet object payloads to GeoEntities", () => {
+    (pluginManager.getPlugin as any).mockReturnValue(null);
+    wsClient.subscribe("maritime", "ws://engine-1/stream");
+
+    const message = {
+      type: "data",
+      pluginId: "maritime",
+      payload: {
+        "419000001": {
+          id: "mmsi-419000001",
+          mmsi: "419000001",
+          name: "Test Ship",
+          lat: 1.25,
+          lon: 103.8,
+          hdg: 45,
+          spd: 10,
+          last_updated: 1_700_000_000,
+        },
+      },
+    };
+
+    mockWs.onmessage({ data: JSON.stringify(message) });
+
+    expect(dataBus.emit).toHaveBeenCalledWith("dataUpdated", expect.objectContaining({
+      pluginId: "maritime",
+      entities: [
+        expect.objectContaining({
+          id: "mmsi-419000001",
+          pluginId: "maritime",
+          latitude: 1.25,
+          longitude: 103.8,
+          label: "Test Ship",
+        }),
+      ],
+    }));
+  });
+
+  it("still accepts maritime array payloads without a plugin mapper", () => {
+    (pluginManager.getPlugin as any).mockReturnValue(null);
+    wsClient.subscribe("maritime", "ws://engine-1/stream");
+
+    const message = {
+      type: "data",
+      pluginId: "maritime",
+      payload: [{
+        id: "mmsi-1",
+        pluginId: "maritime",
+        latitude: 2,
+        longitude: 3,
+        timestamp: new Date().toISOString(),
+        properties: {},
+      }],
+    };
+
+    mockWs.onmessage({ data: JSON.stringify(message) });
+
+    expect(dataBus.emit).toHaveBeenCalledWith("dataUpdated", expect.objectContaining({
+      pluginId: "maritime",
+      entities: [expect.objectContaining({ id: "mmsi-1", latitude: 2 })],
     }));
   });
 

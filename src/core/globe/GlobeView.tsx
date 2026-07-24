@@ -39,6 +39,7 @@ import { useGlobeStateSync } from "./hooks/useGlobeStateSync";
 import { useGlobeCommandBridge } from "./hooks/useGlobeCommandBridge";
 import { useMcpCatalogPublisher } from "./hooks/useMcpCatalogPublisher";
 import { useMcpRelayBridge } from "./hooks/useMcpRelayBridge";
+import { useViewportOverlay } from "./hooks/useViewportOverlay";
 
 /** Stable references */
 const CONTEXT_OPTIONS = { requestWebgl2: true, webgl: { antialias: true } } as const;
@@ -125,6 +126,7 @@ enableLighting,
 
     useSelectionAnchor(viewerRef.current, viewerReady, selectedEntity, lockedEntityId, selectionEntityRef, animatablesMapRef);
     useCameraSync(viewerRef.current, viewerReady, setCameraPosition, setFps);
+    useViewportOverlay(viewerRef.current, viewerReady);
     const sessionId = useSessionId();
     useGlobeStateSync(sessionId);
     useGlobeCommandBridge(sessionId);

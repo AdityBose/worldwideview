@@ -27,6 +27,11 @@ export interface GlobeSlice {
     isAnimating: boolean;
     /** Current rendering performance in frames per second. */
     fps: number;
+    /**
+     * Current visible bounding box as `[minLat, minLon, maxLat, maxLon]` in degrees.
+     * `null` when the view is zoomed out too far to scope a subscription.
+     */
+    currentViewport: [number, number, number, number] | null;
     /** Updates the full camera transform (position and orientation). */
     setCameraPosition: (
         lat: number,
@@ -40,6 +45,8 @@ export interface GlobeSlice {
     setAnimating: (val: boolean) => void;
     /** Updates the current FPS metric. */
     setFps: (fps: number) => void;
+    /** Sets the current visible viewport bounding box, or `null` to clear it. */
+    setViewport: (bbox: [number, number, number, number] | null) => void;
 }
 
 export const createGlobeSlice: StateCreator<AppStore, [], [], GlobeSlice> = (set) => ({
@@ -51,9 +58,11 @@ export const createGlobeSlice: StateCreator<AppStore, [], [], GlobeSlice> = (set
     cameraRoll: 0,
     isAnimating: false,
     fps: 0,
+    currentViewport: null,
     setCameraPosition: (lat, lon, alt, heading = 0, pitch = -90, roll = 0) => set({
  cameraLat: lat, cameraLon: lon, cameraAlt: alt, cameraHeading: heading, cameraPitch: pitch, cameraRoll: roll
 }),
     setAnimating: (val) => set({ isAnimating: val }),
     setFps: (fps) => set({ fps }),
+    setViewport: (bbox) => set({ currentViewport: bbox }),
 });

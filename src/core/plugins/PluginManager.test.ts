@@ -148,6 +148,23 @@ describe("PluginManager.enablePlugin", () => {
             entities: cachedEntities,
         });
     });
+
+    it("does not rehydrate maritime from cache on enable (live ephemeral)", async () => {
+        const dataHandler = vi.fn();
+        const stale = [makeEntity("old-ship", "maritime")];
+        cacheLayer.set("maritime", stale, 60_000);
+        await pluginManager.registerPlugin(makePlugin({ id: "maritime" }));
+        dataBus.on("dataUpdated", dataHandler);
+
+        await pluginManager.enablePlugin("maritime");
+
+        expect(dataHandler).not.toHaveBeenCalledWith({
+            pluginId: "maritime",
+            entities: stale,
+        });
+        // layerToggled still fires
+        expect(pluginManager.getPlugin("maritime")?.enabled).toBe(true);
+    });
 });
 
 describe("PluginManager.disablePlugin", () => {
@@ -187,6 +204,23 @@ describe("PluginManager — data flow contract", () => {
         });
         // Public accessor reflects the update
         expect(pluginManager.getEntities("df-1")).toEqual(entities);
+    });
+
+    it("does not write maritime entities through to the cache layer", async () => {
+        const dataHandler = vi.fn();
+        dataBus.on("dataUpdated", dataHandler);
+        await pluginManager.registerPlugin(makePlugin({ id: "maritime" }));
+
+        const managed = pluginManager.getPlugin("maritime");
+        const entities = [makeEntity("ship-1", "maritime")];
+        managed!.context.onDataUpdate(entities);
+
+        expect(cacheLayer.get("maritime")).toBeNull();
+        expect(dataHandler).toHaveBeenCalledWith({
+            pluginId: "maritime",
+            entities,
+        });
+        expect(pluginManager.getEntities("maritime")).toEqual(entities);
     });
 });
 

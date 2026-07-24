@@ -72,6 +72,11 @@ services:
       - "${WWV_ENGINE_HOST_PORT:-5000}:5000"
     volumes:
       - ./local-seeders:/app/seeders
+      # RCA-3 fix: shadow node_modules with named volumes so pnpm install
+      # writes deps into Docker's VM storage instead of syncing thousands of
+      # tiny files over VirtioFS/gRPC-FUSE, which freezes Docker Desktop on macOS.
+      - seeders-community-node-modules:/app/seeders/community/node_modules
+      - seeders-private-node-modules:/app/seeders/private/node_modules
     environment:
       - PORT=5000
       - REDIS_URL=redis://wwv-redis:6379
@@ -79,6 +84,7 @@ services:
       - DB_PATH=/app/data/engine.db
       - WWV_SKIP_WS_AUTH=true
       - NODE_ENV=development
+      - AISSTREAM_API_KEY=${AISSTREAM_API_KEY:-}
     depends_on:
       wwv-redis:
         condition: service_healthy
@@ -88,6 +94,9 @@ services:
 
   wwv-redis:
     image: redis:7-alpine
+    ports:
+      # Host access for local tooling only — do not publish on all interfaces.
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -103,3 +112,6 @@ networks:
 volumes:
   wwv-data:
   postgres-data:
+  # RCA-3: isolated volumes for seeder node_modules — never synced to macOS host
+  seeders-community-node-modules:
+  seeders-private-node-modules:

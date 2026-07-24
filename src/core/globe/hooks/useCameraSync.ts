@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import type { Viewer as CesiumViewer } from "cesium";
 import { Cartographic, Math as CesiumMath } from "cesium";
 import { trackEvent } from "@/lib/analytics";
+import { useStore } from "@/core/state/store";
 
 const CAMERA_DEBOUNCE_MS = 2000;
 /** Only fire camera.changed when the view has moved by at least 0.5% */
@@ -39,7 +40,7 @@ export function useCameraSync(
 
             setCameraPosition(lat, lon, alt, heading, pitch, roll);
 
-            // Debounced analytics: fire after camera stops moving
+            // Debounced operations: fire after camera stops moving
             if (debounceRef.current) clearTimeout(debounceRef.current);
             debounceRef.current = setTimeout(() => {
                 trackEvent("camera-move-end", {
@@ -47,6 +48,37 @@ export function useCameraSync(
                     lon: Math.round(lon * 100) / 100,
                     alt: Math.round(alt),
                 });
+
+                // Compute exact view rectangle and sync viewport state
+                const rect = camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
+                if (!rect) {
+                    // An oblique camera can temporarily have no globe rectangle even
+                    // while the user remains close to the last tracked area. Preserve
+                    // that viewport until Cesium provides a replacement rectangle or
+                    // a confirmed wide view clears it below.
+                    return;
+                }
+
+                const minLon = CesiumMath.toDegrees(rect.west);
+                const minLat = CesiumMath.toDegrees(rect.south);
+                const maxLon = CesiumMath.toDegrees(rect.east);
+                const maxLat = CesiumMath.toDegrees(rect.north);
+
+                // Bug 2 & Concern 4: Handle antimeridian (180° meridian) crossing correctly
+                let longitudeSpan = maxLon - minLon;
+                if (longitudeSpan < 0) {
+                    longitudeSpan += 360;
+                }
+
+                // Bug 3: Guard both latitude and longitude spans to prevent vertical/wide view leaks
+                const latitudeSpan = Math.abs(maxLat - minLat);
+
+                // Guard: Avoid triggering subscriptions on zoomed-out global views to protect free API limits
+                if (longitudeSpan > 45 || latitudeSpan > 45) {
+                    useStore.getState().setViewport(null);
+                } else {
+                    useStore.getState().setViewport([minLat, minLon, maxLat, maxLon]);
+                }
             }, CAMERA_DEBOUNCE_MS);
         };
 

@@ -1,8 +1,11 @@
 import type { WsStreamPayload, GeoEntity } from "@worldwideview/wwv-plugin-sdk";
 import { dataBus } from "./DataBus";
+import { cacheLayer } from "./CacheLayer";
+import { mapMaritimeFleetPayload } from "./mapMaritimePayload";
 import { pluginManager } from "../plugins/PluginManager";
 import { useStore } from "../state/store";
 import { ticketAuthEnabledForPlugin } from "../edition";
+import { MARITIME_PLUGIN_ID } from "../plugins/pluginIds";
 import type { PluginTicket } from "@worldwideview/wwv-plugin-sdk";
 
 async function fetchPluginTicket(pluginId: string): Promise<PluginTicket | null> {
@@ -46,6 +49,104 @@ function normalizePluginId(id: string): string {
 
 class WebSocketClient {
   private engines = new Map<string, EngineConnection>();
+
+  constructor() {
+    this.initializeViewportListener();
+  }
+
+  private initializeViewportListener() {
+    if (typeof window === "undefined") return;
+    if (typeof useStore.subscribe !== "function") {
+      console.debug("[WSClient] useStore.subscribe is not a function (mocked in tests) — bypassing viewport listener");
+      return;
+    }
+
+    let prevViewport: [number, number, number, number] | null = null;
+
+    useStore.subscribe((state) => {
+      const viewport = state?.currentViewport || null;
+      // Issue C Optimization: Reference equality fast-path check.
+      // Since state.currentViewport is only updated on debounced settles, its reference
+      // remains identical during 99.9% of store mutations (FPS updates, clock ticks, etc.).
+      if (viewport === prevViewport) return;
+
+      // Deep string diff only when store reference changes
+      if (JSON.stringify(viewport) === JSON.stringify(prevViewport)) {
+        prevViewport = viewport;
+        return;
+      }
+      prevViewport = viewport;
+      this.updateViewportSubscriptions(viewport);
+    });
+  }
+
+  private updateViewportSubscriptions(viewport: [number, number, number, number] | null) {
+    // Only act on engines that have an OPEN maritime socket ready to receive a
+    // fresh subscription this cycle. If none is ready (e.g. mid-reconnect), skip
+    // entirely — clearing local entities without being able to push a new
+    // subscription would blank the globe with no recovery until the socket
+    // reopens. The onopen/welcome handlers replay the current viewport on
+    // reconnect, so nothing is lost by skipping here.
+    const readyEngines = [...this.engines.values()].filter(
+      (engine) => engine.subscriptions.has(MARITIME_PLUGIN_ID) && engine.ws?.readyState === WebSocket.OPEN
+    );
+    if (readyEngines.length === 0) return;
+
+    // Keep the previous fleet while an in-range viewport request is in flight.
+    // The next maritime snapshot replaces it atomically through the normal DataBus
+    // path, avoiding an empty globe during the seeder's flush interval. Zoom-out is
+    // different: clear immediately because maritime paint is intentionally disabled.
+    if (viewport === null) {
+      useStore.getState().clearEntities(MARITIME_PLUGIN_ID);
+      cacheLayer.invalidate(MARITIME_PLUGIN_ID);
+    }
+
+    for (const engine of readyEngines) {
+      this.updateSubscriptionForEngine(engine, viewport);
+    }
+  }
+
+  private updateSubscriptionForEngine(engine: EngineConnection, viewport: [number, number, number, number] | null) {
+    if (!engine.ws || engine.ws.readyState !== WebSocket.OPEN) return;
+
+    // Zoomed out: still register interest with the engine (required for broadcast),
+    // but do NOT attach a fake chokepoint box (previously Malacca). Painting is
+    // gated in handleDataMessage while currentViewport is null so HUD stays honest.
+    // Do not send boundingBoxes: [] — engine may treat empty as "global".
+    if (!viewport) {
+      this.send(engine, { action: "subscribe", pluginId: MARITIME_PLUGIN_ID });
+      console.debug("[WSClient] Maritime subscribe without bbox (zoomed out — UI will not paint)");
+      return;
+    }
+
+    const [minLat, minLon, maxLat, maxLon] = viewport;
+    let boxes: number[][][];
+
+    // Issue D: Antimeridian detection.
+    // Implicit invariant: minLon > maxLon is only possible when crossing the antimeridian,
+    // guaranteed by the 45° viewport gate inside src/core/globe/hooks/useCameraSync.ts.
+    if (minLon > maxLon) {
+      // View crosses the Antimeridian (180° longitude).
+      // Split into two boxes so a single box does not wrap the long way (~340°).
+      boxes = [
+        [[minLat, minLon], [maxLat, 180.0]],
+        [[minLat, -180.0], [maxLat, maxLon]]
+      ];
+    } else {
+      boxes = [
+        [[minLat, minLon], [maxLat, maxLon]]
+      ];
+    }
+
+    const payload = {
+      action: "subscribe",
+      pluginId: MARITIME_PLUGIN_ID,
+      boundingBoxes: boxes
+    };
+
+    this.send(engine, payload);
+    console.debug(`[WSClient] Dynamic maritime bounding boxes pushed:`, JSON.stringify(boxes));
+  }
 
   private getOrCreateEngine(engineUrl: string): EngineConnection {
     let engine = this.engines.get(engineUrl);
@@ -95,7 +196,11 @@ class WebSocketClient {
               // Skip auth and subscribe immediately, same as the non-auth path.
               engine.awaitingWelcome = false;
               for (const pluginId of engine.subscriptions) {
-                this.send(engine, { action: "subscribe", pluginId });
+                if (pluginId === MARITIME_PLUGIN_ID) {
+                  this.updateSubscriptionForEngine(engine, useStore.getState().currentViewport);
+                } else {
+                  this.send(engine, { action: "subscribe", pluginId });
+                }
               }
               return;
             }
@@ -115,7 +220,11 @@ class WebSocketClient {
       } else {
         // No ticket auth required — subscribe immediately.
         for (const pluginId of engine.subscriptions) {
-          this.send(engine, { action: "subscribe", pluginId });
+          if (pluginId === MARITIME_PLUGIN_ID) {
+            this.updateSubscriptionForEngine(engine, useStore.getState().currentViewport);
+          } else {
+            this.send(engine, { action: "subscribe", pluginId });
+          }
         }
       }
     };
@@ -132,7 +241,11 @@ class WebSocketClient {
             engine.awaitingWelcome = false;
             if (engine.authTimeoutTimer) { clearTimeout(engine.authTimeoutTimer); engine.authTimeoutTimer = null; }
             for (const pluginId of engine.subscriptions) {
-              this.send(engine, { action: "subscribe", pluginId });
+              if (pluginId === MARITIME_PLUGIN_ID) {
+                this.updateSubscriptionForEngine(engine, useStore.getState().currentViewport);
+              } else {
+                this.send(engine, { action: "subscribe", pluginId });
+              }
             }
           }
           return;
@@ -179,22 +292,44 @@ class WebSocketClient {
   private handleDataMessage(data: WsStreamPayload) {
     const pluginId = normalizePluginId(data.pluginId!);
     const plugin = pluginManager.getPlugin(pluginId)?.plugin;
-    let finalEntities = data.payload as GeoEntity[];
+    let finalEntities: GeoEntity[];
     const existingEntities = useStore.getState().entitiesByPlugin[pluginId] || [];
 
+    // Plugin mapper always wins when present (richer fields / trails / filters).
     if (plugin && typeof (plugin as any).mapWebsocketPayload === "function") {
       finalEntities = (plugin as any).mapWebsocketPayload(data.payload, existingEntities);
+    } else if (pluginId === MARITIME_PLUGIN_ID) {
+      // Core fallback: seeder publishes MMSI→ship dict; SDK type says GeoEntity[].
+      const mapped = mapMaritimeFleetPayload(data.payload);
+      if (mapped) {
+        finalEntities = mapped;
+      } else if (Array.isArray(data.payload)) {
+        finalEntities = data.payload.map((e) => ({
+          ...e,
+          timestamp: new Date(e.timestamp || Date.now()),
+        }));
+      } else {
+        console.warn(`[WsClient] Payload for ${pluginId} is not a fleet object or array. Ignoring.`);
+        return;
+      }
     } else if (!Array.isArray(data.payload)) {
       console.warn(`[WsClient] Payload for ${pluginId} is an object but no mapWebsocketPayload exists. Ignoring.`);
       return;
     } else {
-      finalEntities = finalEntities.map((e) => ({
+      finalEntities = data.payload.map((e) => ({
         ...e,
         timestamp: new Date(e.timestamp || Date.now()),
       }));
     }
 
-    console.debug(`[WSClient] 🔄 Dispatching ${finalEntities.length} entities for ${pluginId} to DataBus`);
+    // Zoomed out: stay subscribed for engine interest, but do not paint ships.
+    // Matches AppShell HUD ("Zoom in to view live shipping activity").
+    if (pluginId === MARITIME_PLUGIN_ID && useStore.getState().currentViewport == null) {
+      console.debug("[WSClient] Dropping maritime paint while zoomed out (viewport null)");
+      return;
+    }
+
+    console.debug(`[WSClient] Dispatching ${finalEntities.length} entities for ${pluginId} to DataBus`);
 
     dataBus.emit("dataUpdated", {
       pluginId,
@@ -223,7 +358,11 @@ class WebSocketClient {
     // Only send immediately if auth is not in-flight; the welcome handler will
     // replay all pending subscriptions once auth succeeds (see onmessage:121-124).
     if (!engine.awaitingWelcome) {
-      this.send(engine, { action: "subscribe", pluginId });
+      if (pluginId === MARITIME_PLUGIN_ID) {
+        this.updateSubscriptionForEngine(engine, useStore.getState().currentViewport);
+      } else {
+        this.send(engine, { action: "subscribe", pluginId });
+      }
     }
   }
 

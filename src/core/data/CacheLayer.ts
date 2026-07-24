@@ -1,4 +1,5 @@
 import type { GeoEntity } from "@/core/plugins/PluginTypes";
+import { LIVE_EPHEMERAL_PLUGIN_IDS } from "@/core/plugins/pluginIds";
 
 interface CacheEntry {
     entities: GeoEntity[];
@@ -28,6 +29,11 @@ class CacheLayer {
             };
             request.onsuccess = () => {
                 this.db = request.result;
+                // Drop any pre-fix durable fleets for live ephemeral plugins
+                // (e.g. hour-old maritime snapshots written before cache policy change).
+                for (const pluginId of LIVE_EPHEMERAL_PLUGIN_IDS) {
+                    this.invalidate(pluginId);
+                }
                 resolve();
             };
             request.onerror = () => {

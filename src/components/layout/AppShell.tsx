@@ -17,6 +17,7 @@ import { BottomPanelManager } from "@/components/layout/BottomPanelManager";
 import { TimelineSync } from "@/core/globe/TimelineSync";
 import { pluginManager } from "@/core/plugins/PluginManager";
 import { pluginRegistry } from "@/core/plugins/PluginRegistry";
+import { MARITIME_PLUGIN_ID } from "@/core/plugins/pluginIds";
 
 import { useStore } from "@/core/state/store";
 import { dataBus } from "@/core/data/DataBus";
@@ -70,6 +71,10 @@ export function AppShell() {
 } = useMarketplaceSync(hostReady);
     const setTheme = useStore((s) => s.setTheme);
     const theme = useStore((s) => s.theme);
+    const currentViewport = useStore((s) => s.currentViewport);
+    // Narrow selector: only re-render AppShell when the maritime toggle flips —
+    // not on every vessel/entityCount tick (which mutates the whole layers map).
+    const isMaritimeEnabled = useStore((s) => s.layers[MARITIME_PLUGIN_ID]?.enabled ?? false);
 
     // Hydrate theme on mount
     useEffect(() => {
@@ -180,6 +185,12 @@ export function AppShell() {
             <div className={`app-shell__globe ${theme === "tactical" ? "tactical-scanlines" : ""}`}>
                 <GlobeView />
             </div>
+
+            {isMaritimeEnabled && currentViewport === null && (
+                <div className="maritime-zoom-hud">
+                    <span>🔍 Zoom in to view live shipping activity</span>
+                </div>
+            )}
 
         <TimelineSync />
         <DataBusSubscriber />

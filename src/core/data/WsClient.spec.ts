@@ -10,8 +10,21 @@ vi.mock("./DataBus", () => ({
 vi.mock("../plugins/PluginManager", () => ({
     pluginManager: { getPlugin: vi.fn(() => null) },
 }));
+const { clearEntitiesMock, invalidateMock } = vi.hoisted(() => ({
+    clearEntitiesMock: vi.fn(),
+    invalidateMock: vi.fn(),
+}));
 vi.mock("../state/store", () => ({
-    useStore: { getState: vi.fn(() => ({ entitiesByPlugin: {} })) },
+    useStore: {
+        getState: vi.fn(() => ({
+            entitiesByPlugin: {},
+            currentViewport: null,
+            clearEntities: clearEntitiesMock,
+        })),
+    },
+}));
+vi.mock("./CacheLayer", () => ({
+    cacheLayer: { invalidate: invalidateMock, get: vi.fn(), set: vi.fn() },
 }));
 
 // Fake WebSocket that stays CONNECTING until explicitly opened by tests
@@ -62,11 +75,15 @@ let engineIndex = 0;
 const nextEngineUrl = () => `wss://engine-${++engineIndex}.test`;
 
 describe("WsClient — first-message auth", () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         FakeWebSocket.instances.length = 0;
         savedWebSocket = global.WebSocket;
         global.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
         vi.clearAllMocks();
+        // The wsClient is a module-level singleton cached across tests; reset its
+        // engine map so leaked OPEN connections from a prior test don't bleed in.
+        const { wsClient } = await import("./WsClient");
+        (wsClient as any).engines.clear();
     });
 
     afterEach(() => {
@@ -176,5 +193,103 @@ describe("WsClient — first-message auth", () => {
         );
 
         fetchSpy.mockRestore();
+    });
+
+    it("sends correct bounding boxes for maritime dynamic subscription (including antimeridian split)", async () => {
+        const { wsClient } = await import("./WsClient");
+        const url = nextEngineUrl();
+        wsClient.subscribe("maritime", url);
+
+        const ws = FakeWebSocket.instances.at(-1)!;
+        ws.triggerOpen();
+        ws.sentMessages.length = 0; // Clear initial messages
+
+        const engine = (wsClient as any).engines.get(url);
+
+        // Test Case A: Zoomed out (null viewport) — plain subscribe, no Malacca bbox
+        (wsClient as any).updateSubscriptionForEngine(engine, null);
+        let msgs = ws.sentMessages.map((m) => JSON.parse(m));
+        expect(msgs.at(-1)).toEqual({
+            action: "subscribe",
+            pluginId: "maritime",
+        });
+        expect(msgs.at(-1).boundingBoxes).toBeUndefined();
+
+        // Test Case B: Standard viewport
+        (wsClient as any).updateSubscriptionForEngine(engine, [10, 20, 15, 25]);
+        msgs = ws.sentMessages.map((m) => JSON.parse(m));
+        expect(msgs.at(-1)).toEqual({
+            action: "subscribe",
+            pluginId: "maritime",
+            boundingBoxes: [[[10, 20], [15, 25]]]
+        });
+
+        // Test Case C: Antimeridian crossing (Fiji / dateline)
+        (wsClient as any).updateSubscriptionForEngine(engine, [-15, 170, -10, -170]);
+        msgs = ws.sentMessages.map((m) => JSON.parse(m));
+        expect(msgs.at(-1)).toEqual({
+            action: "subscribe",
+            pluginId: "maritime",
+            boundingBoxes: [
+                [[-15, 170], [-10, 180.0]],
+                [[-15, -180.0], [-10, -170]]
+            ]
+        });
+    });
+
+    it("keeps the existing maritime fleet while an in-range viewport update is in flight", async () => {
+        const { wsClient } = await import("./WsClient");
+        const url = nextEngineUrl();
+        wsClient.subscribe("maritime", url);
+
+        const ws = FakeWebSocket.instances.at(-1)!;
+        ws.triggerOpen();
+        ws.sentMessages.length = 0;
+
+        (wsClient as any).updateViewportSubscriptions([10, 20, 15, 25]);
+
+        expect(clearEntitiesMock).not.toHaveBeenCalled();
+        expect(invalidateMock).not.toHaveBeenCalled();
+        const msgs = ws.sentMessages.map((m) => JSON.parse(m));
+        expect(msgs.at(-1)).toEqual({
+            action: "subscribe",
+            pluginId: "maritime",
+            boundingBoxes: [[[10, 20], [15, 25]]],
+        });
+    });
+
+    it("clears maritime entities on zoom-out and resubscribes without a Malacca bbox", async () => {
+        const { wsClient } = await import("./WsClient");
+        const url = nextEngineUrl();
+        wsClient.subscribe("maritime", url);
+
+        const ws = FakeWebSocket.instances.at(-1)!;
+        ws.triggerOpen();
+        ws.sentMessages.length = 0;
+
+        (wsClient as any).updateViewportSubscriptions(null);
+
+        expect(clearEntitiesMock).toHaveBeenCalledWith("maritime");
+        expect(invalidateMock).toHaveBeenCalledWith("maritime");
+        const msgs = ws.sentMessages.map((m) => JSON.parse(m));
+        expect(msgs.at(-1)).toEqual({ action: "subscribe", pluginId: "maritime" });
+        expect(msgs.at(-1).boundingBoxes).toBeUndefined();
+    });
+
+    it("does NOT clear maritime entities when no socket is OPEN (mid-reconnect)", async () => {
+        const { wsClient } = await import("./WsClient");
+        const url = nextEngineUrl();
+        wsClient.subscribe("maritime", url);
+
+        const ws = FakeWebSocket.instances.at(-1)!;
+        // Deliberately do NOT open the socket — it stays CONNECTING.
+        ws.sentMessages.length = 0;
+
+        (wsClient as any).updateViewportSubscriptions([10, 20, 15, 25]);
+
+        // Nothing sent and, crucially, entities NOT wiped — otherwise the globe
+        // would blank with no way to refill until the socket reopens.
+        expect(clearEntitiesMock).not.toHaveBeenCalled();
+        expect(ws.sentMessages.length).toBe(0);
     });
 });

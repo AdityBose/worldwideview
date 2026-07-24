@@ -15,6 +15,7 @@ import { trackEvent } from "@/lib/analytics";
 import { resolveEngineUrl } from "@/core/data/resolveEngineUrl";
 import { fetchLocalEngineManifest } from "@/core/data/engineManifest";
 import { pluginRegistry } from "@/core/plugins/PluginRegistry";
+import { LIVE_EPHEMERAL_PLUGIN_IDS } from "@/core/plugins/pluginIds";
 
 /**
  * ManagedPlugin represents the internal state and instance of a registered data source.
@@ -229,16 +230,21 @@ class PluginManager {
         // Signal that data is loading
         dataBus.emit("layerLoadingChanged", { pluginId, loading: true });
 
-        // Try to load from cache immediately so UI feels responsive
-        let cached = cacheLayer.get(pluginId);
-        if (!cached) {
-            cached = await cacheLayer.getFromPersistent(pluginId);
-        }
+        // Live ephemeral plugins (e.g. maritime) must not paint stale IDB fleets
+        // from a previous region/session. They refill from WebSocket shortly.
+        const ephemeral = LIVE_EPHEMERAL_PLUGIN_IDS.has(pluginId);
+        if (!ephemeral) {
+            // Try to load from cache immediately so UI feels responsive
+            let cached = cacheLayer.get(pluginId);
+            if (!cached) {
+                cached = await cacheLayer.getFromPersistent(pluginId);
+            }
 
-        // If still enabled and we got cached data, emit it
-        if (cached && managed.enabled) {
-            managed.entities = cached;
-            dataBus.emit("dataUpdated", { pluginId, entities: cached });
+            // If still enabled and we got cached data, emit it
+            if (cached && managed.enabled) {
+                managed.entities = cached;
+                dataBus.emit("dataUpdated", { pluginId, entities: cached });
+            }
         }
 
         pollingManager.start(pluginId);
@@ -263,6 +269,9 @@ class PluginManager {
         managed.enabled = false;
         managed.entities = [];
         pollingManager.stop(pluginId);
+        if (LIVE_EPHEMERAL_PLUGIN_IDS.has(pluginId)) {
+            cacheLayer.invalidate(pluginId);
+        }
         console.debug(`[PluginManager] Emitting layerToggled false for ${pluginId}`);
         dataBus.emit("layerToggled", { pluginId, enabled: false });
         dataBus.emit("dataUpdated", { pluginId, entities: [] });
@@ -451,7 +460,11 @@ class PluginManager {
         if (!managed) return;
         managed.entities = entities;
 
-        cacheLayer.set(pluginId, entities, this.configCacheMaxAge);
+        // Ephemeral live streams: do not persist fleets to memory/IDB cache.
+        // Stale region snapshots would otherwise rehydrate on the next enable.
+        if (!LIVE_EPHEMERAL_PLUGIN_IDS.has(pluginId)) {
+            cacheLayer.set(pluginId, entities, this.configCacheMaxAge);
+        }
         dataBus.emit("dataUpdated", { pluginId, entities });
 
         // Clear loading indicator once first data arrives

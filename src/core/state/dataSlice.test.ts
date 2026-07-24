@@ -6,9 +6,10 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { GeoEntity } from '@/core/plugins/PluginTypes';
 import { createDataSlice, DataSlice } from './dataSlice';
 
-// We need a mock store that includes selectedEntity to test the cross-slice update behavior
+// We need a mock store that includes selectedEntity + layers to test cross-slice updates
 interface MockAppStore extends DataSlice {
     selectedEntity: GeoEntity | null;
+    layers: Record<string, { enabled: boolean; entityCount: number; loading: boolean }>;
 }
 
 describe('dataSlice', () => {
@@ -20,6 +21,7 @@ describe('dataSlice', () => {
             return {
                 ...dataSlice,
                 selectedEntity: null,
+                layers: {},
             };
         });
     });
@@ -68,6 +70,22 @@ describe('dataSlice', () => {
 
         expect(store.getState().entitiesByPlugin['plugin-a']).toBeUndefined();
         expect(store.getState().entitiesByPlugin['plugin-b']).toEqual(mockEntitiesB);
+    });
+
+    it('resets layer entityCount when clearing entities', () => {
+        store.setState({
+            layers: {
+                'plugin-a': { enabled: true, entityCount: 42, loading: false },
+                'plugin-b': { enabled: true, entityCount: 7, loading: false },
+            },
+        });
+        store.getState().setEntities('plugin-a', [{ id: 'e1', pluginId: 'plugin-a' } as GeoEntity]);
+
+        store.getState().clearEntities('plugin-a');
+
+        expect(store.getState().entitiesByPlugin['plugin-a']).toBeUndefined();
+        expect(store.getState().layers['plugin-a'].entityCount).toBe(0);
+        expect(store.getState().layers['plugin-b'].entityCount).toBe(7);
     });
 
     it('gets all entities across plugins flattened', () => {

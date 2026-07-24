@@ -16,7 +16,7 @@ export interface DataSlice {
     entitiesByPlugin: Record<string, GeoEntity[]>;
     /** Updates the entity list for a specific plugin and refreshes selection if needed. */
     setEntities: (pluginId: string, entities: GeoEntity[]) => void;
-    /** Removes all entities associated with a specific plugin from memory. */
+    /** Removes all entities for a plugin and resets that layer's entityCount to 0. */
     clearEntities: (pluginId: string) => void;
     /** Retrieves a flattened array of all visible entities from all active plugins. */
     getAllEntities: () => GeoEntity[];
@@ -36,9 +36,17 @@ export const createDataSlice: StateCreator<AppStore, [], [], DataSlice> = (set, 
             return updates;
         }),
     clearEntities: (pluginId) => set((state) => {
-            const copy = { ...state.entitiesByPlugin };
-            delete copy[pluginId];
-            return { entitiesByPlugin: copy };
+            const entitiesByPlugin = { ...state.entitiesByPlugin };
+            delete entitiesByPlugin[pluginId];
+
+            // Keep layer panel count aligned with the globe. Viewport clears and
+            // other callers historically only wiped entities, leaving a stale count.
+            const layers = { ...state.layers };
+            if (layers[pluginId]) {
+                layers[pluginId] = { ...layers[pluginId], entityCount: 0 };
+            }
+
+            return { entitiesByPlugin, layers };
         }),
     getAllEntities: () => {
         const state = get();
